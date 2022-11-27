@@ -3,8 +3,9 @@
 
 
 Manager::Manager(const int diff, const int intense):
-    _seed(1), _diff(diff), _intense(intense), _qtotal(10), _start_time(0), x(1), y(1), fcnPtr(nullptr)
+    _seed(time(NULL)), _diff(diff), _intense(intense), _qtotal(10), _start_time(0), x(1), y(1), fcnPtr(nullptr)
 {
+    std::srand(_seed);
     _qtotal = _intense * 10;
 
     if (diff == 1) {
