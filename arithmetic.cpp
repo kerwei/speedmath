@@ -7,13 +7,12 @@
 using namespace std;
 
 
-bool isNumber(string& str)
-/*
-    Function to check the string character by character
-    Extracted from https://www.geeksforgeeks.org/continue-statement-cpp/
-    on 12 Nov 2022
-*/
-{
+bool isNumber(string& str) {
+    /*
+        Function to check the string character by character
+        Extracted from https://www.geeksforgeeks.org/continue-statement-cpp/
+        on 12 Nov 2022
+    */
     for (char const &c : str) {
        
         // using the std::isdigit() function
