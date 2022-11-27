@@ -79,83 +79,83 @@ void updaterecords(std::vector<std::vector<int>> *records, int diff, int intense
 }
 
 
-int main(int argc, char* argv[]) {
-    srand(time(NULL));
+// int main(int argc, char* argv[]) {
+//     srand(time(NULL));
 
-    // Set difficulty
-    std::string sdiff{""};
-    std::cout << "Enter the difficulty: (1) 1-digit (2) 2-digits ..." << std::endl;
-    std::cin >> sdiff;
+//     // Set difficulty
+//     std::string sdiff{""};
+//     std::cout << "Enter the difficulty: (1) 1-digit (2) 2-digits ..." << std::endl;
+//     std::cin >> sdiff;
 
-    // Set intensity (number of questions)
-    std::string sintense{""};
-    std::cout << "Enter the intensity: (1) 10 questions (2) 20 questions ..." << std::endl;
-    std::cin >> sintense;
+//     // Set intensity (number of questions)
+//     std::string sintense{""};
+//     std::cout << "Enter the intensity: (1) 10 questions (2) 20 questions ..." << std::endl;
+//     std::cin >> sintense;
 
-    // Create the record matrix
-    // TODO: Read the records from file
-    std::vector<int> rows(11, -1);
-    std::vector<std::vector<int>> records(11, rows);
+//     // Create the record matrix
+//     // TODO: Read the records from file
+//     std::vector<int> rows(11, -1);
+//     std::vector<std::vector<int>> records(11, rows);
 
-    int x{0}; 
-    int y{0};
+//     int x{0}; 
+//     int y{0};
 
-    string sanswer{""};
-    int answer{0};
-    int diff{stoi(sdiff)};
-    int intense{stoi(sintense)};
+//     string sanswer{""};
+//     int answer{0};
+//     int diff{stoi(sdiff)};
+//     int intense{stoi(sintense)};
 
-    int (*fcnPtr)(int);
-    if (diff == 1) {
-        fcnPtr = &random_one_digit;
-    }
-    else {
-        fcnPtr = &random_ge_two_digit;
-    }
+//     int (*fcnPtr)(int);
+//     if (diff == 1) {
+//         fcnPtr = &random_one_digit;
+//     }
+//     else {
+//         fcnPtr = &random_ge_two_digit;
+//     }
 
-    int i{0};
-    int res{0};
+//     int i{0};
+//     int res{0};
 
-    time_t t_start = time(NULL);
-    while (i < intense * 10) {
-        x = (*fcnPtr)(diff);
-        y = (*fcnPtr)(diff);
+//     time_t t_start = time(NULL);
+//     while (i < intense * 10) {
+//         x = (*fcnPtr)(diff);
+//         y = (*fcnPtr)(diff);
 
-        std::cout << x << " + " << y << std::endl;
-        std::cin >> sanswer;
+//         std::cout << x << " + " << y << std::endl;
+//         std::cin >> sanswer;
 
-        if (!isNumber(sanswer)) {
-            std::cout << "wrong" << std::endl;
-            i++;
-            continue;
-        }
+//         if (!isNumber(sanswer)) {
+//             std::cout << "wrong" << std::endl;
+//             i++;
+//             continue;
+//         }
 
-        answer = stoi(sanswer);
+//         answer = stoi(sanswer);
 
-        if (x + y == answer) {
-            std::cout << "correct" << std::endl;
-            res++;
-        }
-        else {
-            std::cout << "wrong" << std::endl;
-        }
+//         if (x + y == answer) {
+//             std::cout << "correct" << std::endl;
+//             res++;
+//         }
+//         else {
+//             std::cout << "wrong" << std::endl;
+//         }
 
-        i++;
-    }
+//         i++;
+//     }
 
-    long elapsed = time(NULL) - t_start;
-    double speed = std::numeric_limits<double>::infinity();
+//     long elapsed = time(NULL) - t_start;
+//     double speed = std::numeric_limits<double>::infinity();
 
-    if (res > 0) {
-        speed = (double) elapsed/res;
-    }
+//     if (res > 0) {
+//         speed = (double) elapsed/res;
+//     }
 
-    std::cout << "Elapsed: " << elapsed << " seconds" << std::endl;
-    std::cout << "Score: " << res << "/" << intense * 10 << std::endl;
-    std::cout << "Speed: " << fixed << setprecision(5) << speed << " seconds per hit" << std::endl;
+//     std::cout << "Elapsed: " << elapsed << " seconds" << std::endl;
+//     std::cout << "Score: " << res << "/" << intense * 10 << std::endl;
+//     std::cout << "Speed: " << fixed << setprecision(5) << speed << " seconds per hit" << std::endl;
 
-    updaterecords(&records, diff, intense, (int) elapsed);
-    std::cout << "Updated records. Row: " << intense << " Col: " << diff << " Elapsed: " << records[intense][diff] << std::endl;
+//     updaterecords(&records, diff, intense, (int) elapsed);
+//     std::cout << "Updated records. Row: " << intense << " Col: " << diff << " Elapsed: " << records[intense][diff] << std::endl;
 
-    return 0;
-}
+//     return 0;
+// }

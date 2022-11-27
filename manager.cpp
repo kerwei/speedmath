@@ -1,5 +1,5 @@
-#include "arithmetic.h";
-#include "manager.h";
+#include "arithmetic.h"
+#include "manager.h"
 
 
 Manager::Manager(const int diff, const int intense):
