@@ -28,6 +28,10 @@ std::string Manager::qnext() {
     return std::to_string(x) + " + " + std::to_string(y);
 }
 
-bool Manager::scoreit(const int answer) {
-    return x + y == answer;
+std::string Manager::grade_answer(const int answer) {
+    return scoreit(x, y, answer);
+}
+
+std::string Manager::grade_answer(const string answer) {
+    return Manager::grade_answer(stoi(answer));
 }

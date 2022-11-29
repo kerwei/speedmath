@@ -24,6 +24,11 @@ int main(int argc, char* argv[]) {
     while (true) {
         try {
             std::cout << gameManager.qnext() << std::endl;
+
+            std::string sanswer{""};
+            std::cin >> sanswer;
+
+            std::cout << gameManager.grade_answer(sanswer) << std::endl;
         }
         catch (const std::out_of_range& e) {
             break;

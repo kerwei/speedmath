@@ -7,6 +7,8 @@
 using namespace std;
 
 
+std::string scoreit(const int x, const int y, const int answer);
+
 bool isNumber(string& str);
 
 int random_one_digit(int phony);

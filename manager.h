@@ -9,7 +9,8 @@ class Manager {
     public:
         Manager(const int diff, const int intense);
         std::string qnext();
-        bool scoreit(const int);
+        std::string grade_answer(const int answer);
+        std::string grade_answer(const string answer);
 
     private:
         const int _seed, _diff, _intense;
