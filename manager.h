@@ -1,4 +1,5 @@
 #include <functional>
+#include <sstream>
 #include <stdexcept>
 #include <string>
 
@@ -11,11 +12,14 @@ class Manager {
         std::string qnext();
         std::string grade_answer(const int answer);
         std::string grade_answer(const string answer);
+        std::string print_results();
 
     private:
         const int _seed, _diff, _intense;
-        long int _start_time;
+        int _qtotal, x, y, score;
+        long int _elapsed;
 
-        int _qtotal, x, y;
+        std::stringstream _ss;
+        time_t _start_time;
         std::function<int(const int)> fcnPtr;
 };  // class Manager

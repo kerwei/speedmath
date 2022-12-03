@@ -79,13 +79,8 @@ void updaterecords(std::vector<std::vector<int>> *records, int diff, int intense
 }
 
 
-std::string scoreit(const int x, const int y, const int answer) {
-    if (x + y == answer) {
-        return "correct";
-    }
-    else {
-        return "wrong";
-    }
+bool scoreit(const int x, const int y, const int answer) {
+    return x + y == answer;
 }
 
 // int main(int argc, char* argv[]) {

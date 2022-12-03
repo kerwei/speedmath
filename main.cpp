@@ -35,5 +35,7 @@ int main(int argc, char* argv[]) {
         }
     }
 
+    std::cout << gameManager.print_results() << std::endl;
+
     return 0;
 }
