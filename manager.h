@@ -11,7 +11,7 @@ class Manager {
         Manager(const int diff, const int intense);
         std::string qnext();
         std::string grade_answer(const int answer);
-        std::string grade_answer(const string answer);
+        std::string grade_answer(string answer);
         std::string print_results();
 
     private:

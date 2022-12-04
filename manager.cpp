@@ -43,7 +43,13 @@ std::string Manager::grade_answer(const int answer) {
     }
 }
 
-std::string Manager::grade_answer(const string answer) {
+std::string Manager::grade_answer(string answer) {
+    if (!isNumber(answer)) {
+        // if the input answer is non-numeric
+        // ensure that the answer is always wrong
+        return Manager::grade_answer(x + y + 1);
+    }
+
     return Manager::grade_answer(stoi(answer));
 }
 
