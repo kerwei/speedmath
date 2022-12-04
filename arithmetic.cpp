@@ -34,51 +34,6 @@ int random_ge_two_digit(int n) {
 }
 
 
-void updaterecords(std::vector<std::vector<int>> *records, int diff, int intense, int score) {
-    /* records:
-            0    1     2     3    4 +--> diff
-        0   0    0     0     0    0
-        1   0    10    -1    -1   -1
-        2   0   -1     27    -1   -1
-        3   0   -1     -1    -1   -1
-        4   0   -1     -1    -1   -1
-        +
-        |
-        v
-        intense (x10)
-
-        Constraints:
-            diff > 0; intense > 0; (diff, intense) has a default value of -1
-
-        update (diff, intense) if 1/score > 1/(diff, intense)
-
-        TODO: Refactor this into a 1D array,
-        where column indices for the second row = col1 + (n x row) + coln
-        0, 1, 2, ... col, col1-0, col1-1, col1-2, ... col1-n, col2-0 
-    */
-    int rows = records->size();
-    int columns = records[0].size();
-
-    // Add more inner vectors to record if intense is greater than the rows
-    if (intense >= rows) {
-        std::vector<int> new_row(columns, -1);
-        std::vector<std::vector<int>> new_block(intense - rows + 1, new_row);
-        records->insert(records->end(), new_block.begin(), new_block.end());
-    }
-
-    // If diff is greater than the number of columns,
-    // append a -1 to the end of each nested vector
-    if (diff >= columns) {
-        for (int j = 0; j <= intense; j++) {
-            std::vector<int>::iterator it = (*records)[j].end();
-            (*records)[j].insert(it, diff - columns + 1, -1);
-        }
-    }
-
-    (*records)[intense][diff] = score;
-}
-
-
 bool scoreit(const int x, const int y, const int answer) {
     return x + y == answer;
 }

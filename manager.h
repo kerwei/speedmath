@@ -19,7 +19,11 @@ class Manager {
         int _qtotal, x, y, score;
         long int _elapsed;
 
-        std::stringstream _ss;
         time_t _start_time;
+        std::stringstream _ss;
+        std::vector<int> __row;
+        std::vector<std::vector<int>> _records;
         std::function<int(const int)> fcnPtr;
+        
+        void updaterecords(std::vector<std::vector<int>> *records, int diff, int intense, int score);
 };  // class Manager
