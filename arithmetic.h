@@ -9,8 +9,8 @@ using namespace std;
 
 bool scoreit(const int x, const int y, const int answer);
 
-bool isNumber(string& str);
+bool isNumber(const string str);
 
-int random_one_digit(int phony);
+int random_one_digit(const int phony);
 
-int random_ge_two_digit(int n);
+int random_ge_two_digit(const int n);

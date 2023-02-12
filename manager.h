@@ -25,5 +25,5 @@ class Manager {
         std::vector<std::vector<int>> _records;
         std::function<int(const int)> fcnPtr;
         
-        void updaterecords(std::vector<std::vector<int>> *records, int diff, int intense, int score);
+        void updaterecords(std::vector<std::vector<int>> *records, const int diff, const int intense, const int score);
 };  // class Manager

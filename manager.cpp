@@ -65,7 +65,7 @@ std::string Manager::print_results() {
     return _ss.str();
 }
 
-void Manager::updaterecords(std::vector<std::vector<int>> *records, int diff, int intense, int score) {
+void Manager::updaterecords(std::vector<std::vector<int>> *records, const int diff, const int intense, const int score) {
     /* records:
             0    1     2     3    4 +--> diff
         0   0    0     0     0    0
