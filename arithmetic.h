@@ -9,7 +9,7 @@ using namespace std;
 
 bool scoreit(const int x, const int y, const int answer);
 
-bool isNumber(const string str);
+bool isNumber(const string& str);
 
 int random_one_digit(const int phony);
 

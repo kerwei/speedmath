@@ -7,7 +7,7 @@
 using namespace std;
 
 
-bool isNumber(const string str) {
+bool isNumber(const string& str) {
     /*
         Function to check the string character by character
         Extracted from https://www.geeksforgeeks.org/continue-statement-cpp/
