@@ -1,5 +1,6 @@
 #include "arithmetic.h"
 #include "manager.h"
+#include <fstream>
 
 
 Manager::Manager(const int diff, const int intense):
@@ -107,4 +108,21 @@ void Manager::updaterecords(std::vector<std::vector<int>> *records, const int di
     }
 
     (*records)[intense][diff] = score;
+}
+
+void Manager::savehighscore() {
+    ofstream savefile;
+    savefile.open("highscore.txt");
+
+    const int cols = _records[0].size();
+    // Loop through the scores and persist them to file
+    for (int i = 0; i < _records.size(); i++) {
+        for (int j = 0; j < cols - 1; j++) {
+            savefile << _records[i][j] << " ";
+        }
+
+        savefile << _records[i][cols -1] << std::endl;
+    }
+
+    savefile.close();
 }

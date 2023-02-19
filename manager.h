@@ -12,7 +12,9 @@ class Manager {
         std::string qnext();
         std::string grade_answer(const int answer);
         std::string grade_answer(const string& answer);
+        // TODO: Persist file to text file so that all-time high score can be tracked
         std::string print_results();
+        void savehighscore();
 
     private:
         const int _seed, _diff, _intense;

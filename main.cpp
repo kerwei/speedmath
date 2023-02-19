@@ -36,6 +36,7 @@ int main(int argc, char* argv[]) {
     }
 
     std::cout << gameManager.print_results() << std::endl;
+    gameManager.savehighscore();
 
     return 0;
 }
