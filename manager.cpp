@@ -1,5 +1,6 @@
 #include "arithmetic.h"
 #include "manager.h"
+#include <fstream>
 
 
 Manager::Manager(const int diff, const int intense):
@@ -65,7 +66,7 @@ std::string Manager::print_results() {
     return _ss.str();
 }
 
-void Manager::updaterecords(std::vector<std::vector<int>> *records, const int diff, const int intense, const int score) {
+void Manager::updatescore() {
     /* records:
             0    1     2     3    4 +--> diff
         0   0    0     0     0    0
@@ -87,24 +88,41 @@ void Manager::updaterecords(std::vector<std::vector<int>> *records, const int di
         where column indices for the second row = col1 + (n x row) + coln
         0, 1, 2, ... col, col1-0, col1-1, col1-2, ... col1-n, col2-0 
     */
-    int rows = records->size();
-    int columns = records[0].size();
+    int rows = _records.size();
+    int columns = _records[0].size();
 
     // Add more inner vectors to record if intense is greater than the rows
-    if (intense >= rows) {
+    if (_intense >= rows) {
         std::vector<int> new_row(columns, -1);
-        std::vector<std::vector<int>> new_block(intense - rows + 1, new_row);
-        records->insert(records->end(), new_block.begin(), new_block.end());
+        std::vector<std::vector<int>> new_block(_intense - rows + 1, new_row);
+        _records.insert(_records.end(), new_block.begin(), new_block.end());
     }
 
     // If diff is greater than the number of columns,
     // append a -1 to the end of each nested vector
-    if (diff >= columns) {
-        for (int j = 0; j <= intense; j++) {
-            std::vector<int>::iterator it = (*records)[j].end();
-            (*records)[j].insert(it, diff - columns + 1, -1);
+    if (_diff >= columns) {
+        for (int j = 0; j <= _intense; j++) {
+            std::vector<int>::iterator it = _records[j].end();
+            _records[j].insert(it, _diff - columns + 1, -1);
         }
     }
 
-    (*records)[intense][diff] = score;
+    _records[_intense][_diff] = score;
+}
+
+void Manager::savehighscore() {
+    ofstream savefile;
+    savefile.open("highscore.txt");
+
+    const int cols = _records[0].size();
+    // Loop through the scores and persist them to file
+    for (int i = 0; i < _records.size(); i++) {
+        for (int j = 0; j < cols - 1; j++) {
+            savefile << _records[i][j] << " ";
+        }
+
+        savefile << _records[i][cols -1] << std::endl;
+    }
+
+    savefile.close();
 }
