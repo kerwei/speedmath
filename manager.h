@@ -14,11 +14,14 @@ class Manager {
         std::string grade_answer(const string& answer);
         // TODO: Persist file to text file so that all-time high score can be tracked
         std::string print_results();
+
+        void updatescore();
         void savehighscore();
 
     private:
         const int _seed, _diff, _intense;
-        int _qtotal, x, y, score;
+        int _qtotal, x, y;
+        int score; // the number of questions answered correctly
         long int _elapsed;
 
         time_t _start_time;
@@ -26,6 +29,4 @@ class Manager {
         std::vector<int> __row;
         std::vector<std::vector<int>> _records;
         std::function<int(const int)> fcnPtr;
-        
-        void updaterecords(std::vector<std::vector<int>> *records, const int diff, const int intense, const int score);
 };  // class Manager
