@@ -66,7 +66,7 @@ std::string Manager::print_results() {
     return _ss.str();
 }
 
-void Manager::updatescore() {
+void Manager::update_score() {
     /* records:
             0    1     2     3    4 +--> diff
         0   0    0     0     0    0
@@ -110,9 +110,9 @@ void Manager::updatescore() {
     _records[_intense][_diff] = score;
 }
 
-void Manager::savehighscore() {
+void Manager::save_score() {
     ofstream savefile;
-    savefile.open("highscore.txt");
+    savefile.open(_savefile);
 
     const int cols = _records[0].size();
     // Loop through the scores and persist them to file
@@ -125,4 +125,74 @@ void Manager::savehighscore() {
     }
 
     savefile.close();
+}
+
+void Manager::load_score() {
+    ifstream savefile;
+    savefile.open(_savefile);
+
+    std:: stringstream _ifss;
+    std::string line;
+    std::vector<string> _frecords;
+    /*
+        Convert input file stream to game record object
+        _records is instantiated as a default (10, 10) matrix
+        file input is not guaranteed to be (10, 10)
+        1. Read row count
+        2. Read column count
+        3. Instantiate _record container
+        4. Convert file input to _record
+    */
+    int r{0};   // row count
+    while (getline(savefile, line)) {
+        std::cout << line << std::endl;
+        _frecords.push_back(line);
+        r++;
+    }
+
+    int c{0};   // column count
+    for (int j = 0; j < _frecords[0].length(); j++) {
+        // count non-numeric chars because numbers can be more than 1 digit
+        if (!isNumber(string(1, _frecords[0][j]))) {
+            c++;
+        }
+    }
+
+    // the count of numbers would be non-numeric chars (gaps) + 1
+    if (c > 0) {
+        c++;
+    }
+
+    ensure_record_shape(r, c);
+
+    // TODO: iterate and update each cell in the record
+
+    savefile.close();
+}
+
+void Manager::set_params(const int diff, const int intense) {
+    _diff = diff;
+    _intense = intense;
+}
+
+void Manager::ensure_record_shape(const int row, const int col) {
+    int _row{(int) _records.size()};
+    int _col{(int) _records[0].size()};
+    // existing records already has the required rows and cols
+    if (_row >= row && _col >= col) {
+        return;
+    }
+
+    if (row > _row) {
+        std::vector<int> new_row(_col, -1);
+        std::vector<std::vector<int>> new_block(row - _row, new_row);
+        _records.insert(_records.end(), new_block.begin(), new_block.end());
+    }
+
+    if (_diff > _col) {
+        for (int j = 0; j <= _intense; j++) {
+            std::vector<int>::iterator it = _records[j].end();
+            _records[j].insert(it, col - _col, -1);
+        }
+    }
 }

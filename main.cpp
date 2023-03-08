@@ -5,6 +5,12 @@ using namespace std;
 
 
 int main(int argc, char* argv[]) {
+    // Create a new game manager with default values
+    Manager gameManager = Manager(1, 1);
+
+    // Load existing highscore from file
+    gameManager.load_score();
+
     // Set difficulty
     std::string sdiff{""};
     std::cout << "Enter the difficulty: (1) 1-digit (2) 2-digits ..." << std::endl;
@@ -18,8 +24,9 @@ int main(int argc, char* argv[]) {
     int diff{stoi(sdiff)};
     int intense{stoi(sintense)};
 
-    // Create a new game
-    Manager gameManager = Manager(diff, intense);
+    gameManager.set_params(diff, intense);
+
+    // Print the highscore for this mode and count down to start
 
     while (true) {
         try {
@@ -35,9 +42,9 @@ int main(int argc, char* argv[]) {
         }
     }
 
-    gameManager.updatescore();
+    gameManager.update_score();
     std::cout << gameManager.print_results() << std::endl;
-    gameManager.savehighscore();
+    gameManager.save_score();
 
     return 0;
 }
