@@ -88,50 +88,42 @@ void Manager::update_score() {
         where column indices for the second row = col1 + (n x row) + coln
         0, 1, 2, ... col, col1-0, col1-1, col1-2, ... col1-n, col2-0 
     */
-    int rows = _records.size();
-    int columns = _records[0].size();
-
-    // Add more inner vectors to record if intense is greater than the rows
-    if (_intense >= rows) {
-        std::vector<int> new_row(columns, -1);
-        std::vector<std::vector<int>> new_block(_intense - rows + 1, new_row);
-        _records.insert(_records.end(), new_block.begin(), new_block.end());
-    }
-
-    // If diff is greater than the number of columns,
-    // append a -1 to the end of each nested vector
-    if (_diff >= columns) {
-        for (int j = 0; j <= _intense; j++) {
-            std::vector<int>::iterator it = _records[j].end();
-            _records[j].insert(it, _diff - columns + 1, -1);
-        }
-    }
-
+    ensure_record_shape(_intense + 1, _diff + 1);
     _records[_intense][_diff] = score;
 }
 
 void Manager::save_score() {
-    ofstream savefile;
-    savefile.open(_savefile);
-
     const int cols = _records[0].size();
     // Loop through the scores and persist them to file
     for (int i = 0; i < _records.size(); i++) {
         for (int j = 0; j < cols - 1; j++) {
-            savefile << _records[i][j] << " ";
+            std::cout << _records[i][j] << " ";
         }
-
-        savefile << _records[i][cols -1] << std::endl;
+        std::cout << _records[i][cols -1] << std::endl;
     }
-
-    savefile.close();
 }
+
+// void Manager::save_score() {
+//     ofstream savefile;
+//     savefile.open(_savefile);
+
+//     const int cols = _records[0].size();
+//     // Loop through the scores and persist them to file
+//     for (int i = 0; i < _records.size(); i++) {
+//         for (int j = 0; j < cols - 1; j++) {
+//             savefile << _records[i][j] << " ";
+//         }
+//         std::cout << i << std::endl;
+//         savefile << _records[i][cols -1] << std::endl;
+//     }
+
+//     savefile.close();
+// }
 
 void Manager::load_score() {
     ifstream savefile;
     savefile.open(_savefile);
 
-    std:: stringstream _ifss;
     std::string line;
     std::vector<string> _frecords;
     /*
@@ -150,6 +142,8 @@ void Manager::load_score() {
         r++;
     }
 
+    savefile.close();
+
     int c{0};   // column count
     for (int j = 0; j < _frecords[0].length(); j++) {
         // count non-numeric chars because numbers can be more than 1 digit
@@ -165,9 +159,25 @@ void Manager::load_score() {
 
     ensure_record_shape(r, c);
 
-    // TODO: iterate and update each cell in the record
+    // Iterate and update each cell in the record
+    for (int i=0; i < _records.size(); i++) {           // rows
 
-    savefile.close();
+        int j{0};
+        int value{0};
+        for (string::iterator it = _frecords[i].begin(); it != _frecords[i].end(); it++) {    // columns
+            string ch(1, *it);
+            std::cout << ch << " ";
+            // if (isNumber(schar)) {
+            //     value = value * 10 + std::stoi(schar);
+            // }
+            // else {
+            //     _records[i][j] = value;         // TODO: does not seem to stop at linebreak
+            //     value = 0;
+            //     j++;
+            // }
+        }
+        std::cout << std::endl;
+    }
 }
 
 void Manager::set_params(const int diff, const int intense) {
@@ -187,12 +197,15 @@ void Manager::ensure_record_shape(const int row, const int col) {
         std::vector<int> new_row(_col, -1);
         std::vector<std::vector<int>> new_block(row - _row, new_row);
         _records.insert(_records.end(), new_block.begin(), new_block.end());
+        _row = row;
     }
 
-    if (_diff > _col) {
-        for (int j = 0; j <= _intense; j++) {
+    if (col > _col) {
+        for (int j = 0; j <= _row; j++) {
             std::vector<int>::iterator it = _records[j].end();
             _records[j].insert(it, col - _col, -1);
         }
+
+        _col = col;
     }
 }
