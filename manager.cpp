@@ -1,3 +1,4 @@
+#include <vector>
 #include "arithmetic.h"
 #include "manager.h"
 #include <fstream>
