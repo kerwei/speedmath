@@ -35,8 +35,10 @@ int main(int argc, char* argv[]) {
         }
     }
 
+    // Create another matrix for the elapsed time
     gameManager.updatescore();
     std::cout << gameManager.print_results() << std::endl;
+    // Save highscore needs to save both the number of correct answers and the time taken
     gameManager.savehighscore();
 
     return 0;

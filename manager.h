@@ -13,7 +13,7 @@ class Manager {
         std::string qnext();
         std::string grade_answer(const int answer);
         std::string grade_answer(const string& answer);
-        // TODO: Persist file to text file so that all-time high score can be tracked
+
         std::string print_results();
 
         void updatescore();
@@ -28,6 +28,13 @@ class Manager {
         time_t _start_time;
         std::stringstream _ss;
         std::vector<int> __row;
-        std::vector<std::vector<int>> _records;
+        std::vector<long> __lrow;
+        std::vector<std::vector<int>> _correct_board;
+        std::vector<std::vector<long>> _elapsed_board;
         std::function<int(const int)> fcnPtr;
+
+        void update_elapsed();
+        void update_hit();
+        void save_elapsed();
+        void save_correct_count();
 };  // class Manager
