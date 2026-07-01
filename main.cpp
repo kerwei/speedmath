@@ -1,5 +1,5 @@
-#include "arithmetic.h"
-#include "manager.h"
+#include "libspeedmath/arithmetic.h"
+#include "libspeedmath/manager.h"
 
 using namespace std;
 
@@ -15,18 +15,39 @@ int main(int argc, char* argv[]) {
     std::cout << "Enter the intensity: (1) 10 questions (2) 20 questions ..." << std::endl;
     std::cin >> sintense;
 
+    // Choose operators
+    std::string sops{""};
+    std::cout << "Choose operators (e.g. 1234 for all):" << std::endl;
+    std::cout << "  (1) +  (2) -  (3) *  (4) /" << std::endl;
+    std::cin >> sops;
+
+    vector<Op> ops;
+    for (const char& c : sops) {
+        switch (c) {
+            case '1': ops.push_back(Op::ADD); break;
+            case '2': ops.push_back(Op::SUB); break;
+            case '3': ops.push_back(Op::MUL); break;
+            case '4': ops.push_back(Op::DIV); break;
+        }
+    }
+    if (ops.empty()) {
+        ops.push_back(Op::ADD);
+    }
+
     int diff{stoi(sdiff)};
     int intense{stoi(sintense)};
 
     // Create a new game
-    Manager gameManager = Manager(diff, intense);
+    Manager gameManager = Manager(diff, intense, ops);
 
     while (true) {
         try {
             std::cout << gameManager.qnext() << std::endl;
 
             std::string sanswer{""};
-            std::cin >> sanswer;
+            // Clear previous input and get full line
+            std::cin >> ws;
+            std::getline(std::cin, sanswer);
 
             std::cout << gameManager.grade_answer(sanswer) << std::endl;
         }

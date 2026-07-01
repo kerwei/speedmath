@@ -1,0 +1,21 @@
+# xmake build output
+build/
+.xmake/
+
+# Compiled binaries (manual builds)
+speedmath
+
+# Object files
+*.o
+*.obj
+
+# Runtime score persistence
+correct.txt
+elapsed.txt
+
+# IDE / editor (user-specific)
+.vscode/
+.idea/
+*.swp
+*.swo
+*~

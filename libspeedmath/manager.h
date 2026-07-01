@@ -1,15 +1,19 @@
+#pragma once
+
 #include <functional>
 #include <sstream>
 #include <stdexcept>
 #include <string>
 #include <vector>
 
+#include "arithmetic.h"
+
 using namespace std;
 
 
 class Manager {
     public:
-        Manager(const int diff, const int intense);
+        Manager(const int diff, const int intense, const vector<Op>& ops);
         std::string qnext();
         std::string grade_answer(const int answer);
         std::string grade_answer(const string& answer);
@@ -21,6 +25,8 @@ class Manager {
 
     private:
         const int _seed, _diff, _intense;
+        const vector<Op> _ops;
+        Op _op;
         int _qtotal, x, y;
         int score; // the number of questions answered correctly
         long int _elapsed;

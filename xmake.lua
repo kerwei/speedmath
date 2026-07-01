@@ -1,0 +1,17 @@
+-- 项目配置 (xiàngmù pèizhì — project configuration)
+set_xmakever("3.0.0")
+set_project("speedmath")
+set_version("1.0.0")
+set_languages("c++20")
+
+-- 静态库 (jìngtài kù — static library): 核心游戏逻辑 (héxīn yóuxì luóji — core game logic)
+target("libspeedmath")
+    set_kind("static")
+    add_files("libspeedmath/*.cpp")
+    add_includedirs(".")
+
+-- 可执行文件 (kě zhíxíng wénjiàn — executable binary): 控制台入口 (kòngzhìtái rùkǒu — console entry point)
+target("speedmath")
+    set_kind("binary")
+    add_files("main.cpp")
+    add_deps("libspeedmath")

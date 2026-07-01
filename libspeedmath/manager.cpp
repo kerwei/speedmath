@@ -2,10 +2,12 @@
 #include "arithmetic.h"
 #include "manager.h"
 #include <fstream>
+#include <iomanip>
 
 
-Manager::Manager(const int diff, const int intense):
-    _seed(time(NULL)), _diff(diff), _intense(intense), _qtotal(10), _elapsed(0),
+Manager::Manager(const int diff, const int intense, const vector<Op>& ops):
+    _seed(time(NULL)), _diff(diff), _intense(intense), _ops(ops), _op(Op::ADD),
+    _qtotal(10), _elapsed(0),
     x(1), y(1), score(0), _start_time(time(NULL)),
     __row({-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1}),
     __lrow({-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1}),
@@ -29,20 +31,37 @@ std::string Manager::qnext() {
         throw std::out_of_range("");
     }
 
-    x = fcnPtr(_diff);
-    y = fcnPtr(_diff);
+    // Pick a random operator from the chosen set
+    _op = _ops[std::rand() % _ops.size()];
+
+    if (_op == Op::DIV) {
+        // Generate divisor (non-zero), quotient, and remainder
+        int divisor = fcnPtr(_diff);
+        while (divisor == 0) {
+            divisor = fcnPtr(_diff);
+        }
+        int quotient = fcnPtr(_diff);
+        int remainder = std::rand() % divisor;
+        x = divisor * quotient + remainder;
+        y = divisor;
+    }
+    else {
+        x = fcnPtr(_diff);
+        y = fcnPtr(_diff);
+    }
+
     _qtotal -= 1;
 
     // Start the timer
     _start_time = time(NULL);
 
-    return std::to_string(x) + " + " + std::to_string(y);
+    return std::to_string(x) + " " + op_symbol(_op) + " " + std::to_string(y);
 }
 
 std::string Manager::grade_answer(const int answer) {
     _elapsed += (time(NULL) - _start_time);
 
-    if (scoreit(x, y, answer)) {
+    if (check_answer(_op, x, y, answer)) {
         score += 1;
         return "correct";
     }
@@ -52,13 +71,34 @@ std::string Manager::grade_answer(const int answer) {
 }
 
 std::string Manager::grade_answer(const string& answer) {
-    if (!isNumber(answer)) {
-        // if the input answer is non-numeric
-        // ensure that the answer is always wrong
-        return Manager::grade_answer(x + y + 1);
+    _elapsed += (time(NULL) - _start_time);
+
+    if (_op == Op::DIV) {
+        // Parse "quotient remainder" format
+        size_t space = answer.find(' ');
+        if (space == string::npos || !isNumber(answer.substr(0, space))
+            || !isNumber(answer.substr(space + 1))) {
+            return "wrong";
+        }
+        int q = stoi(answer.substr(0, space));
+        int r = stoi(answer.substr(space + 1));
+
+        if (check_answer(_op, x, y, q, r)) {
+            score += 1;
+            return "correct";
+        }
+    }
+    else {
+        if (!isNumber(answer)) {
+            return "wrong";
+        }
+        if (check_answer(_op, x, y, stoi(answer))) {
+            score += 1;
+            return "correct";
+        }
     }
 
-    return Manager::grade_answer(stoi(answer));
+    return "wrong";
 }
 
 std::string Manager::print_results() {
@@ -75,39 +115,15 @@ void Manager::updatescore() {
 }
 
 void Manager::update_hit() {
-    /* _hit_board:
-            0    1     2     3    4 +--> diff
-        0   0    0     0     0    0
-        1   0    10    -1    -1   -1
-        2   0   -1     27    -1   -1
-        3   0   -1     -1    -1   -1
-        4   0   -1     -1    -1   -1
-        +
-        |
-        v
-        intense (x10)
-
-        Constraints:
-            diff > 0; intense > 0; (diff, intense) has a default value of -1
-
-        update (diff, intense) if 1/score > 1/(diff, intense)
-
-        TODO: Refactor this into a 1D array,
-        where column indices for the second row = col1 + (n x row) + coln
-        0, 1, 2, ... col, col1-0, col1-1, col1-2, ... col1-n, col2-0 
-    */
     int rows = _correct_board.size();
     int columns = _correct_board[0].size();
 
-    // Add more inner vectors to record if intense is greater than the rows
     if (_intense >= rows) {
         std::vector<int> new_row(columns, -1);
         std::vector<std::vector<int>> new_block(_intense - rows + 1, new_row);
         _correct_board.insert(_correct_board.end(), new_block.begin(), new_block.end());
     }
 
-    // If diff is greater than the number of columns,
-    // append a -1 to the end of each nested vector
     if (_diff >= columns) {
         for (int j = 0; j <= _intense; j++) {
             std::vector<int>::iterator it = _correct_board[j].end();
@@ -119,39 +135,15 @@ void Manager::update_hit() {
 }
 
 void Manager::update_elapsed() {
-    /* _elapsed_board:
-            0    1     2     3    4 +--> diff
-        0   0    0     0     0    0
-        1   0    10    -1    -1   -1
-        2   0   -1     27    -1   -1
-        3   0   -1     -1    -1   -1
-        4   0   -1     -1    -1   -1
-        +
-        |
-        v
-        intense (x10)
-
-        Constraints:
-            diff > 0; intense > 0; (diff, intense) has a default value of -1
-
-        update (diff, intense) if 1/score > 1/(diff, intense)
-
-        TODO: Refactor this into a 1D array,
-        where column indices for the second row = col1 + (n x row) + coln
-        0, 1, 2, ... col, col1-0, col1-1, col1-2, ... col1-n, col2-0 
-    */
     int rows = _elapsed_board.size();
     int columns = _elapsed_board[0].size();
 
-    // Add more inner vectors to record if intense is greater than the rows
     if (_intense >= rows) {
         std::vector<long> new_row(columns, -1);
         std::vector<std::vector<long>> new_block(_intense - rows + 1, new_row);
         _elapsed_board.insert(_elapsed_board.end(), new_block.begin(), new_block.end());
     }
 
-    // If diff is greater than the number of columns,
-    // append a -1 to the end of each nested vector
     if (_diff >= columns) {
         for (int j = 0; j <= _intense; j++) {
             std::vector<long>::iterator it = _elapsed_board[j].end();
@@ -172,7 +164,6 @@ void Manager::save_correct_count() {
     savefile.open("correct.txt");
 
     const int cols = _correct_board[0].size();
-    // Loop through the scores and persist them to file
     for (int i = 0; i < _correct_board.size(); i++) {
         for (int j = 0; j < cols - 1; j++) {
             savefile << _correct_board[i][j] << " ";
@@ -189,7 +180,6 @@ void Manager::save_elapsed() {
     savefile.open("elapsed.txt");
 
     const int cols = _elapsed_board[0].size();
-    // Loop through the scores and persist them to file
     for (int i = 0; i < _elapsed_board.size(); i++) {
         for (int j = 0; j < cols - 1; j++) {
             savefile << _elapsed_board[i][j] << " ";

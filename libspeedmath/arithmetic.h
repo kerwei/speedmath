@@ -1,3 +1,5 @@
+#pragma once
+
 #include <iostream>
 #include <limits>
 #include <math.h>
@@ -6,7 +8,13 @@
 using namespace std;
 
 
+enum class Op { ADD, SUB, MUL, DIV };
+
 bool scoreit(const int x, const int y, const int answer);
+
+bool check_answer(const Op op, const int x, const int y, const int answer, const int remainder = 0);
+
+char op_symbol(const Op op);
 
 bool isNumber(const string& str);
 
