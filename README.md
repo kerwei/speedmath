@@ -116,6 +116,8 @@ xmake f -m debug          # switch to debug mode
 
 ---
 
-<p align="center">
-  <sub>Powered by <strong>DeepSeek-V4-Flash</strong></sub>
-</p>
+<div align="center">
+  <img src="https://github.com/deepseek-ai/DeepSeek-V2/blob/main/figures/logo.svg?raw=true" width="300" alt="DeepSeek Logo" />
+  <br/>
+  <sub><i>Powered by <strong>DeepSeek-V4-Flash</strong></i></sub>
+</div>
