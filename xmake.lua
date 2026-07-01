@@ -10,6 +10,13 @@ target("libspeedmath")
     add_files("libspeedmath/*.cpp")
     add_includedirs(".")
 
+-- 后端服务器 (hòuduān fúwùqì — backend server)
+target("backend")
+    set_kind("binary")
+    add_files("backend/main.cpp")
+    add_deps("libspeedmath")
+    add_includedirs("backend")
+
 -- 可执行文件 (kě zhíxíng wénjiàn — executable binary): 控制台入口 (kòngzhìtái rùkǒu — console entry point)
 target("speedmath")
     set_kind("binary")
