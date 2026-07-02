@@ -22,3 +22,10 @@ target("speedmath")
     set_kind("binary")
     add_files("main.cpp")
     add_deps("libspeedmath")
+
+-- 测试 (cèshì — tests): runs all unit tests
+target("tests")
+    set_kind("binary")
+    add_files("tests/test_*.cpp")
+    add_deps("libspeedmath")
+    add_includedirs("tests")
