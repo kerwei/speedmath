@@ -130,8 +130,15 @@ TEST_CASE("Manager::grade_answer(string): division") {
     int quotient = x / y;
     int remainder = x % y;
 
-    string correct = to_string(quotient) + " " + to_string(remainder);
-    CHECK(m.grade_answer(correct) == "correct");
+    // 格式 A: space-separated (kònggé fēngé — space-separated)
+    string correct_spaced = to_string(quotient) + " " + to_string(remainder);
+    CHECK(m.grade_answer(correct_spaced) == "correct");
+
+    // 格式 B: concatenated (liánjiē — no space)
+    string correct_concat = to_string(quotient) + to_string(remainder);
+    CHECK(m.grade_answer(correct_concat) == "correct");
+
+    // Wrong formats
     CHECK(m.grade_answer(to_string(quotient)) == "wrong");  // missing remainder
     CHECK(m.grade_answer("") == "wrong");
 }

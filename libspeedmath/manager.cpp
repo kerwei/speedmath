@@ -74,19 +74,34 @@ std::string Manager::grade_answer(const string& answer) {
     _elapsed += (time(NULL) - _start_time);
 
     if (_op == Op::DIV) {
-        // Parse "quotient remainder" format
         size_t space = answer.find(' ');
-        if (space == string::npos || !isNumber(answer.substr(0, space))
-            || !isNumber(answer.substr(space + 1))) {
+
+        if (space != string::npos) {
+            // 格式 A: "商 余数" (shāng yúshù — quotient remainder), space-separated
+            if (isNumber(answer.substr(0, space)) && isNumber(answer.substr(space + 1))) {
+                int q = stoi(answer.substr(0, space));
+                int r = stoi(answer.substr(space + 1));
+                if (check_answer(_op, x, y, q, r)) {
+                    score += 1;
+                    return "correct";
+                }
+            }
             return "wrong";
         }
-        int q = stoi(answer.substr(0, space));
-        int r = stoi(answer.substr(space + 1));
 
-        if (check_answer(_op, x, y, q, r)) {
-            score += 1;
-            return "correct";
+        // 格式 B: "商余数" concatenated, no space — try every split
+        if (!isNumber(answer) || answer[0] == '-') {
+            return "wrong";
         }
+        for (size_t split = 1; split < answer.size(); split++) {
+            int q = stoi(answer.substr(0, split));
+            int r = stoi(answer.substr(split));
+            if (check_answer(_op, x, y, q, r)) {
+                score += 1;
+                return "correct";
+            }
+        }
+        return "wrong";
     }
     else {
         if (!isNumber(answer)) {
