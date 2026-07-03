@@ -3,6 +3,8 @@
 
 #include "httplib.h"
 #include "../libspeedmath/manager.h"
+#include <signal.h>
+#include <thread>
 #include <unordered_map>
 #include <sstream>
 
@@ -11,6 +13,7 @@ using namespace std;
 // 会话存储 (huìhuà chǔncún — session storage)
 // key = session ID, value = Manager*
 static unordered_map<string, Manager*> sessions;
+static httplib::Server* g_svr = nullptr;
 
 static string generate_id() {
     stringstream ss;
@@ -26,8 +29,25 @@ static string param_or(const httplib::Request& req, const string& name, const st
     return fallback;
 }
 
+// 信号等待线程 (xìnhào děngdài xiànchéng — signal wait thread)
+// Reliable approach: signals are delivered via sigwait() instead of a handler
+static void signal_thread() {
+    sigset_t sigs;
+    sigemptyset(&sigs);
+    sigaddset(&sigs, SIGINT);
+    sigaddset(&sigs, SIGTERM);
+
+    int sig = 0;
+    sigwait(&sigs, &sig);
+    std::cout << "\n收到关闭信号 (shōudào guānbì xìnhào — Shutdown received)" << std::endl;
+    if (g_svr) {
+        g_svr->stop();
+    }
+}
+
 int main() {
     httplib::Server svr;
+    g_svr = &svr;
 
     // CORS 支持 (zhīchí — support) for frontend dev server
     svr.set_default_headers({
@@ -124,7 +144,6 @@ int main() {
         delete game;
         sessions.erase(sid);
 
-        // 手动构建 JSON: escape newlines and quotes
         string escaped;
         for (char c : output) {
             if (c == '"') escaped += "\\\"";
@@ -141,8 +160,20 @@ int main() {
     // 静态文件服务 (jìngtài wénjiàn fúwù — serve static frontend files)
     svr.set_mount_point("/", "../frontend/dist");
 
+    // Block signals in the main thread — they'll be handled by sigwait thread
+    sigset_t sigs;
+    sigemptyset(&sigs);
+    sigaddset(&sigs, SIGINT);
+    sigaddset(&sigs, SIGTERM);
+    pthread_sigmask(SIG_BLOCK, &sigs, nullptr);
+
+    // Start the signal waiting thread
+    thread st(signal_thread);
+
     std::cout << "服务器已启动 (fúwùqì yǐ qǐdòng — Server started): http://localhost:8080" << std::endl;
+    std::cout << "按 Ctrl+C 停止 (àn Ctrl+C tíngzhǐ — press Ctrl+C to stop)" << std::endl;
     svr.listen("0.0.0.0", 8080);
 
+    st.join();
     return 0;
 }
