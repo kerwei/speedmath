@@ -21,6 +21,11 @@ int main(int argc, char* argv[]) {
     std::cout << "  (1) +  (2) -  (3) *  (4) /" << std::endl;
     std::cin >> sops;
 
+    // Choose AI difficulty
+    std::string sai{""};
+    std::cout << "AI difficulty: (0) None  (1) Easy  (2) Medium  (3) Hard" << std::endl;
+    std::cin >> sai;
+
     vector<Op> ops;
     for (const char& c : sops) {
         switch (c) {
@@ -36,9 +41,15 @@ int main(int argc, char* argv[]) {
 
     int diff{stoi(sdiff)};
     int intense{stoi(sintense)};
+    int ai_val{stoi(sai)};
+
+    bool ai_enabled = ai_val > 0;
+    AiLevel ai_level = AiLevel::EASY;
+    if (ai_val == 2) ai_level = AiLevel::MEDIUM;
+    else if (ai_val >= 3) ai_level = AiLevel::HARD;
 
     // Create a new game
-    Manager gameManager = Manager(diff, intense, ops);
+    Manager gameManager = Manager(diff, intense, ops, ai_level, ai_enabled);
 
     while (true) {
         try {

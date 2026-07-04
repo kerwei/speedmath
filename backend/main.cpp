@@ -65,6 +65,7 @@ int main() {
         int diff = stoi(param_or(req, "diff", "1"));
         int intense = stoi(param_or(req, "intense", "1"));
         string ops_str = param_or(req, "ops", "1234");
+        int ai_level_val = stoi(param_or(req, "ai_level", "0"));
 
         vector<Op> ops;
         for (char c : ops_str) {
@@ -79,8 +80,13 @@ int main() {
             ops.push_back(Op::ADD);
         }
 
+        bool ai_enabled = ai_level_val > 0;
+        AiLevel ai_level = AiLevel::EASY;
+        if (ai_level_val == 2) ai_level = AiLevel::MEDIUM;
+        else if (ai_level_val >= 3) ai_level = AiLevel::HARD;
+
         string sid = generate_id();
-        Manager* game = new Manager(diff, intense, ops);
+        Manager* game = new Manager(diff, intense, ops, ai_level, ai_enabled);
         sessions[sid] = game;
 
         res.set_content(
@@ -102,7 +108,13 @@ int main() {
         Manager* game = it->second;
         try {
             string q = game->qnext();
-            res.set_content("{\"question\":\"" + q + "\"}", "application/json");
+            string json = "{\"question\":\"" + q + "\"";
+            if (game->ai_enabled()) {
+                json += ",\"ai_answer\":\"" + game->ai_answer() + "\"";
+                json += ",\"ai_delay_ms\":" + to_string(game->ai_delay_ms());
+            }
+            json += "}";
+            res.set_content(json, "application/json");
         }
         catch (const out_of_range&) {
             res.set_content("{\"question\":\"\",\"finished\":true}", "application/json");
