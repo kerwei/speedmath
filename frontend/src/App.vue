@@ -36,8 +36,8 @@ function toggleLang() {
   <div class="app-container">
     <div class="app-header">
       <div class="app-title-block">
-        <h1 class="app-title">{{ t('title') }}</h1>
-        <span class="app-subtitle">{{ t('subtitle') }}</span>
+        <h1 class="app-title">速算</h1>
+        <span class="app-subtitle">speedmath</span>
       </div>
       <button class="lang-toggle" @click="toggleLang">{{ locale === 'zh' ? 'EN' : '中' }}</button>
     </div>

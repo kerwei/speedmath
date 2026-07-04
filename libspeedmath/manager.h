@@ -42,7 +42,7 @@ class Manager {
         void updatescore();
         void savehighscore();
 
-        static const long PENALTY_MS = 5000;  // 错题罚时: +5s
+        static const long PENALTY_MS = 3000;  // 错题罚时: +3s
 
     private:
         const int _seed, _diff, _intense;

@@ -79,9 +79,9 @@ function startGame() {
     <div class="form-group" v-for="(_, idx) in aiCount" :key="idx">
       <label>{{ t('ai.prefix') }}{{ idx + 1 }} {{ t('settings.ai.difficulty') }}</label>
       <select v-model.number="aiDiff[idx]">
-        <option value="1">{{ t('settings.ai.easy') }} — {{ t('settings.ai.easy.hint') }}</option>
-        <option value="2">{{ t('settings.ai.medium') }} — {{ t('settings.ai.medium.hint') }}</option>
-        <option value="3">{{ t('settings.ai.hard') }} — {{ t('settings.ai.hard.hint') }}</option>
+        <option value="1">{{ t('settings.ai.easy') }}</option>
+        <option value="2">{{ t('settings.ai.medium') }}</option>
+        <option value="3">{{ t('settings.ai.hard') }}</option>
       </select>
     </div>
 
