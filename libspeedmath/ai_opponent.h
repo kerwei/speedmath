@@ -21,6 +21,7 @@ public:
     int score() const { return _score; }
     int total() const { return _total; }
     long elapsed_ms() const { return _elapsed_ms; }
+    AiLevel level() const { return _level; }
 
     void record(bool correct, int time_ms);
 

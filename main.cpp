@@ -43,13 +43,16 @@ int main(int argc, char* argv[]) {
     int intense{stoi(sintense)};
     int ai_val{stoi(sai)};
 
-    bool ai_enabled = ai_val > 0;
-    AiLevel ai_level = AiLevel::EASY;
-    if (ai_val == 2) ai_level = AiLevel::MEDIUM;
-    else if (ai_val >= 3) ai_level = AiLevel::HARD;
+    vector<AiLevel> ai_levels;
+    if (ai_val > 0) {
+        AiLevel lvl = AiLevel::EASY;
+        if (ai_val == 2) lvl = AiLevel::MEDIUM;
+        else if (ai_val >= 3) lvl = AiLevel::HARD;
+        ai_levels.push_back(lvl);
+    }
 
     // Create a new game
-    Manager gameManager = Manager(diff, intense, ops, ai_level, ai_enabled);
+    Manager gameManager = Manager(diff, intense, ops, ai_levels);
 
     while (true) {
         try {

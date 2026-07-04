@@ -65,7 +65,36 @@ int main() {
         int diff = stoi(param_or(req, "diff", "1"));
         int intense = stoi(param_or(req, "intense", "1"));
         string ops_str = param_or(req, "ops", "1234");
-        int ai_level_val = stoi(param_or(req, "ai_level", "0"));
+
+        // Parse AI levels: support both "ai_level" (single) and "ai_levels" (comma-separated)
+        vector<AiLevel> ai_levels;
+        string ai_levels_str = param_or(req, "ai_levels", "");
+        if (ai_levels_str.empty()) {
+            // Fallback to single ai_level param
+            int ai_level_val = stoi(param_or(req, "ai_level", "0"));
+            if (ai_level_val > 0) {
+                AiLevel lvl = AiLevel::EASY;
+                if (ai_level_val == 2) lvl = AiLevel::MEDIUM;
+                else if (ai_level_val >= 3) lvl = AiLevel::HARD;
+                ai_levels.push_back(lvl);
+            }
+        } else {
+            // Comma-separated: "1,2,3" = Easy, Medium, Hard
+            size_t start = 0, end;
+            while ((end = ai_levels_str.find(',', start)) != string::npos) {
+                int v = stoi(ai_levels_str.substr(start, end - start));
+                if (v >= 1 && v <= 3) {
+                    ai_levels.push_back(static_cast<AiLevel>(v - 1));
+                }
+                start = end + 1;
+            }
+            if (start < ai_levels_str.size()) {
+                int v = stoi(ai_levels_str.substr(start));
+                if (v >= 1 && v <= 3) {
+                    ai_levels.push_back(static_cast<AiLevel>(v - 1));
+                }
+            }
+        }
 
         vector<Op> ops;
         for (char c : ops_str) {
@@ -80,13 +109,8 @@ int main() {
             ops.push_back(Op::ADD);
         }
 
-        bool ai_enabled = ai_level_val > 0;
-        AiLevel ai_level = AiLevel::EASY;
-        if (ai_level_val == 2) ai_level = AiLevel::MEDIUM;
-        else if (ai_level_val >= 3) ai_level = AiLevel::HARD;
-
         string sid = generate_id();
-        Manager* game = new Manager(diff, intense, ops, ai_level, ai_enabled);
+        Manager* game = new Manager(diff, intense, ops, ai_levels);
         sessions[sid] = game;
 
         res.set_content(
@@ -110,8 +134,17 @@ int main() {
             string q = game->qnext();
             string json = "{\"question\":\"" + q + "\"";
             if (game->ai_enabled()) {
-                json += ",\"ai_answer\":\"" + game->ai_answer() + "\"";
-                json += ",\"ai_delay_ms\":" + to_string(game->ai_delay_ms());
+                json += ",\"ai_answers\":[";
+                for (int i = 0; i < game->ai_count(); i++) {
+                    if (i > 0) json += ",";
+                    json += "\"" + game->ai_answer(i) + "\"";
+                }
+                json += "],\"ai_delays\":[";
+                for (int i = 0; i < game->ai_count(); i++) {
+                    if (i > 0) json += ",";
+                    json += to_string(game->ai_delay_ms(i));
+                }
+                json += "]";
             }
             json += "}";
             res.set_content(json, "application/json");

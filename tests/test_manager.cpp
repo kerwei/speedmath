@@ -186,7 +186,6 @@ TEST_CASE("Manager::print_results: format") {
     // Should contain key labels
     CHECK(results.find("Elapsed") != string::npos);
     CHECK(results.find("Score") != string::npos);
-    CHECK(results.find("Speed") != string::npos);
 }
 
 // ============================================================

@@ -5,8 +5,8 @@
 #include <iomanip>
 
 
-Manager::Manager(const int diff, const int intense, const vector<Op>& ops, AiLevel ai_level, bool ai_enabled):
-    _seed(time(NULL)), _diff(diff), _intense(intense), _ops(ops), _ai_enabled(ai_enabled), _op(Op::ADD),
+Manager::Manager(const int diff, const int intense, const vector<Op>& ops, const vector<AiLevel>& ai_levels):
+    _seed(time(NULL)), _diff(diff), _intense(intense), _ops(ops), _op(Op::ADD),
     _qtotal(10), _elapsed(0),
     x(1), y(1), score(0), _start_time(time(NULL)),
     __row({-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1}),
@@ -25,8 +25,11 @@ Manager::Manager(const int diff, const int intense, const vector<Op>& ops, AiLev
         fcnPtr = &random_ge_two_digit;
     }
 
-    if (_ai_enabled) {
-        _ai = new AiOpponent(ai_level);
+    // Create AI opponents for each level in the vector
+    for (AiLevel lvl : ai_levels) {
+        _ais.push_back(new AiOpponent(lvl));
+        _ai_answers.push_back("");
+        _ai_delays.push_back(0);
     }
 }
 
@@ -55,31 +58,7 @@ std::string Manager::qnext() {
 
     _qtotal -= 1;
 
-    // 让 AI 对手决定答案 (ràng AI duìshǒu juédìng dá'àn — let AI opponent decide)
-    if (_ai_enabled && _ai) {
-        int correct = x + y;  // placeholder, will use correct operator below
-        int r = 0;
-        switch (_op) {
-            case Op::ADD: correct = x + y; break;
-            case Op::SUB: correct = x - y; break;
-            case Op::MUL: correct = x * y; break;
-            case Op::DIV: correct = x / y; r = x % y; break;
-        }
-        _ai_last_answer = _ai->decide_answer(x, y, op_symbol(_op), correct, r);
-        _ai_last_delay = _ai->delay_ms();
-    }
-
-    // Start the timer
-    _start_time = time(NULL);
-
-    return std::to_string(x) + " " + op_symbol(_op) + " " + std::to_string(y);
-}
-
-void Manager::_grade_ai_answer() {
-    if (!_ai || !_ai_enabled) return;
-
-    // Determine AI's correctness by checking its stored answer
-    // instead of calling decide_answer again
+    // 让所有 AI 对手决定答案 (let all AI opponents decide)
     int correct = 0, r = 0;
     switch (_op) {
         case Op::ADD: correct = x + y; break;
@@ -88,19 +67,40 @@ void Manager::_grade_ai_answer() {
         case Op::DIV: correct = x / y; r = x % y; break;
     }
 
-    bool ai_correct = false;
-    if (_op == Op::DIV) {
-        size_t space = _ai_last_answer.find(' ');
-        if (space != string::npos) {
-            int q = stoi(_ai_last_answer.substr(0, space));
-            int rem = stoi(_ai_last_answer.substr(space + 1));
-            ai_correct = (q == correct && rem == r);
-        }
-    } else {
-        ai_correct = (stoi(_ai_last_answer) == correct);
+    for (size_t i = 0; i < _ais.size(); i++) {
+        _ai_answers[i] = _ais[i]->decide_answer(x, y, op_symbol(_op), correct, r);
+        _ai_delays[i] = _ais[i]->delay_ms();
     }
 
-    _ai->record(ai_correct, _ai_last_delay);
+    // Start the timer
+    _start_time = time(NULL);
+
+    return std::to_string(x) + " " + op_symbol(_op) + " " + std::to_string(y);
+}
+
+void Manager::_grade_ai_answers() {
+    int correct = 0, r = 0;
+    switch (_op) {
+        case Op::ADD: correct = x + y; break;
+        case Op::SUB: correct = x - y; break;
+        case Op::MUL: correct = x * y; break;
+        case Op::DIV: correct = x / y; r = x % y; break;
+    }
+
+    for (size_t i = 0; i < _ais.size(); i++) {
+        bool ai_correct = false;
+        if (_op == Op::DIV) {
+            size_t space = _ai_answers[i].find(' ');
+            if (space != string::npos) {
+                int q = stoi(_ai_answers[i].substr(0, space));
+                int rem = stoi(_ai_answers[i].substr(space + 1));
+                ai_correct = (q == correct && rem == r);
+            }
+        } else {
+            ai_correct = (stoi(_ai_answers[i]) == correct);
+        }
+        _ais[i]->record(ai_correct, _ai_delays[i]);
+    }
 }
 
 std::string Manager::grade_answer(const int answer) {
@@ -110,7 +110,7 @@ std::string Manager::grade_answer(const int answer) {
     if (correct) {
         score += 1;
     }
-    _grade_ai_answer();
+    _grade_ai_answers();
     return correct ? "correct" : "wrong";
 }
 
@@ -121,20 +121,22 @@ std::string Manager::grade_answer(const string& answer) {
         size_t space = answer.find(' ');
 
         if (space != string::npos) {
-            // 格式 A: "商 余数" (shāng yúshù — quotient remainder), space-separated
             if (isNumber(answer.substr(0, space)) && isNumber(answer.substr(space + 1))) {
                 int q = stoi(answer.substr(0, space));
                 int r = stoi(answer.substr(space + 1));
                 if (check_answer(_op, x, y, q, r)) {
                     score += 1;
+                    _grade_ai_answers();
                     return "correct";
                 }
             }
+            _grade_ai_answers();
             return "wrong";
         }
 
-        // 格式 B: "商余数" concatenated, no space — try every split
+        // Concatenated format
         if (!isNumber(answer) || answer[0] == '-') {
+            _grade_ai_answers();
             return "wrong";
         }
         for (size_t split = 1; split < answer.size(); split++) {
@@ -142,27 +144,39 @@ std::string Manager::grade_answer(const string& answer) {
             int r = stoi(answer.substr(split));
             if (check_answer(_op, x, y, q, r)) {
                 score += 1;
-                _grade_ai_answer();
+                _grade_ai_answers();
                 return "correct";
             }
         }
-        _grade_ai_answer();
+        _grade_ai_answers();
         return "wrong";
     }
     else {
         if (!isNumber(answer)) {
-            _grade_ai_answer();
+            _grade_ai_answers();
             return "wrong";
         }
         if (check_answer(_op, x, y, stoi(answer))) {
             score += 1;
-            _grade_ai_answer();
+            _grade_ai_answers();
             return "correct";
         }
     }
 
-    _grade_ai_answer();
+    _grade_ai_answers();
     return "wrong";
+}
+
+int Manager::ai_total_score() const {
+    int s = 0;
+    for (auto* ai : _ais) s += ai->score();
+    return s;
+}
+
+long Manager::ai_total_elapsed_ms() const {
+    long e = 0;
+    for (auto* ai : _ais) e += ai->elapsed_ms();
+    return e;
 }
 
 std::string Manager::print_results() {
@@ -172,20 +186,29 @@ std::string Manager::print_results() {
         _ss << "Speed: " << fixed << setprecision(5) << (double) _elapsed/score << " seconds per hit" << std::endl;
     }
 
-    if (_ai_enabled && _ai) {
+    if (!_ais.empty()) {
         _ss << std::endl;
-        _ss << "--- AI 对手 (AI Opponent) ---" << std::endl;
-        _ss << "AI Score: " << _ai->score() << "/" << _ai->total() << std::endl;
-        double ai_time_sec = _ai->elapsed_ms() / 1000.0;
-        int ai_score_v = _ai->score();
-        if (ai_score_v > 0) {
-            _ss << "AI Speed: " << fixed << setprecision(3) << ai_time_sec / ai_score_v << " seconds per hit" << std::endl;
+        _ss << "--- AI 对手们 (AI Opponents) ---" << std::endl;
+        string level_names[] = {"Easy", "Medium", "Hard"};
+        int best_ai_score = -1;
+        for (size_t i = 0; i < _ais.size(); i++) {
+            int ai_total_v = _ais[i]->total();
+            int ai_score_v = _ais[i]->score();
+            double ai_time_sec = _ais[i]->elapsed_ms() / 1000.0;
+            string lvl_name = level_names[static_cast<int>(_ais[i]->level())];
+            _ss << "AI" << (i+1) << " (" << lvl_name << "): "
+                << ai_score_v << "/" << ai_total_v;
+            if (ai_score_v > 0) {
+                _ss << ", Speed: " << fixed << setprecision(3) << ai_time_sec / ai_score_v << "s/hit";
+            }
+            _ss << std::endl;
+            if (ai_score_v > best_ai_score) best_ai_score = ai_score_v;
         }
-        _ss << "AI Total Time: " << fixed << setprecision(1) << ai_time_sec << " seconds" << std::endl;
 
-        if (score > _ai->score()) {
+        _ss << std::endl;
+        if (score > best_ai_score) {
             _ss << "结果: 玩家胜! (Player wins!)" << std::endl;
-        } else if (score < _ai->score()) {
+        } else if (score < best_ai_score) {
             _ss << "结果: AI 胜! (AI wins!)" << std::endl;
         } else {
             _ss << "结果: 平局! (Draw!)" << std::endl;

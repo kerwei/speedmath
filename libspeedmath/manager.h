@@ -14,18 +14,25 @@ using namespace std;
 
 class Manager {
     public:
-        Manager(const int diff, const int intense, const vector<Op>& ops, AiLevel ai_level = AiLevel::EASY, bool ai_enabled = true);
+        // 构造函数: diff=难度, intense=题量(1=10题), ops=算子, ai_levels=每个AI的难度(空=无AI)
+        Manager(const int diff, const int intense, const vector<Op>& ops, const vector<AiLevel>& ai_levels = {});
+
         std::string qnext();
         std::string grade_answer(const int answer);
         std::string grade_answer(const string& answer);
 
-        // AI 对手信息 (duìshǒu xìnxī — AI opponent info)
-        bool ai_enabled() const { return _ai_enabled; }
-        std::string ai_answer() const { return _ai_last_answer; }
-        int ai_delay_ms() const { return _ai_last_delay; }
-        int ai_score() const { return _ai ? _ai->score() : 0; }
-        int ai_total() const { return _ai ? _ai->total() : 0; }
-        long ai_elapsed_ms() const { return _ai ? _ai->elapsed_ms() : 0; }
+        // AI 对手群信息 (duìshǒu qún xìnxī — multi-AI info)
+        int ai_count() const { return _ais.size(); }
+        bool ai_enabled() const { return !_ais.empty(); }
+        std::string ai_answer(int idx) const { return _ai_answers[idx]; }
+        int ai_delay_ms(int idx) const { return _ai_delays[idx]; }
+        int ai_score(int idx) const { return _ais[idx]->score(); }
+        int ai_total(int idx) const { return _ais[idx]->total(); }
+        long ai_elapsed_ms(int idx) const { return _ais[idx]->elapsed_ms(); }
+
+        // 所有AI的总分/总时间 (for simplicity in frontend)
+        int ai_total_score() const;
+        long ai_total_elapsed_ms() const;
 
         std::string print_results();
 
@@ -35,7 +42,6 @@ class Manager {
     private:
         const int _seed, _diff, _intense;
         const vector<Op> _ops;
-        const bool _ai_enabled;
         Op _op;
         int _qtotal, x, y;
         int score; // the number of questions answered correctly
@@ -49,14 +55,14 @@ class Manager {
         std::vector<std::vector<long>> _elapsed_board;
         std::function<int(const int)> fcnPtr;
 
-        // AI 对手 (duìshǒu — opponent)
-        AiOpponent* _ai = nullptr;
-        std::string _ai_last_answer;  // AI's answer for current question
-        int _ai_last_delay = 0;       // AI's thinking delay for current question
+        // AI 对手群 (duìshǒu qún — opponents)
+        vector<AiOpponent*> _ais;     // AI instances (0-3)
+        vector<string> _ai_answers;    // per-AI answer for current question
+        vector<int> _ai_delays;        // per-AI thinking delay (ms)
 
         void update_elapsed();
         void update_hit();
         void save_elapsed();
         void save_correct_count();
-        void _grade_ai_answer();  // 评分 AI 答案 (píngfēn dá'àn — grade AI's answer)
+        void _grade_ai_answers();  // 评分全部 AI 答案
 };  // class Manager
