@@ -35,6 +35,7 @@ class Manager {
         int player_count() const { return 1 + _ais.size(); }
         long player_cumulative_time(int idx) const { return _player_times[idx]; }
         int player_correct_count(int idx) const;
+        int questions_answered() const { return _questions_answered; }
 
         std::string print_results();
 
@@ -68,6 +69,7 @@ class Manager {
         vector<long> _player_times;
         int _human_correct_count = 0;
         vector<int> _ai_correct_counts;
+        int _questions_answered = 0;
 
         void update_elapsed();
         void update_hit();

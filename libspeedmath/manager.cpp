@@ -134,6 +134,7 @@ string Manager::grade_answer(const int answer) {
     if (correct) { score++; _human_correct_count++; }
     _grade_ai_answers();
     _apply_racing_scores((time(NULL) - _start_time) * 1000, correct);
+    _questions_answered++;
     return correct ? "correct" : "wrong";
 }
 
@@ -172,6 +173,7 @@ string Manager::grade_answer(const string& answer) {
     if (human_correct) { score++; _human_correct_count++; }
     _grade_ai_answers();
     _apply_racing_scores(elapsed_ms, human_correct);
+    _questions_answered++;
     return human_correct ? "correct" : "wrong";
 }
 

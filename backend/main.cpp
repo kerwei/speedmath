@@ -146,6 +146,15 @@ int main() {
                 }
                 json += "]";
             }
+            // Include current standings (updated from previous answer)
+            json += ",\"standings\":[";
+            for (int i = 0; i < game->player_count(); i++) {
+                if (i > 0) json += ",";
+                json += "{\"t\":" + to_string(game->player_cumulative_time(i));
+                json += ",\"c\":" + to_string(game->player_correct_count(i));
+                json += "}";
+            }
+            json += "],\"questions\": " + to_string(game->questions_answered());
             json += "}";
             res.set_content(json, "application/json");
         }

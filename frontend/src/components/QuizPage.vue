@@ -1,5 +1,5 @@
 <script setup>
-import { ref, computed, onMounted, onUnmounted, nextTick, watch } from 'vue'
+import { ref, reactive, computed, onMounted, onUnmounted, nextTick } from 'vue'
 
 const props = defineProps({ config: Object })
 const emit = defineEmits(['finish'])
@@ -28,6 +28,39 @@ const aiRevealed = ref([])   // AI answer shown
 const aiPhase = ref([])      // '', 'reading', 'thinking'
 let aiTimers = []
 let aiPhaseTimers = []
+
+// 排行榜 (pái háng bǎng — leaderboard)
+const standings = ref([])     // [{t: cumulative_ms, c: correct_count}, ...]
+const prevPositions = ref([]) // previous positions to detect movement
+const questionsDone = ref(0)
+const totalQuestions = computed(() => total.value)
+
+const leaderboard = computed(() => {
+  // Build a map: player index → previous position
+  const prevPosMap = {}
+  prevPositions.value.forEach((pidx, pos) => { prevPosMap[pidx] = pos })
+
+  const entries = standings.value.map((s, i) => ({
+    idx: i,
+    name: i === 0 ? 'Human' : `AI${i}`,
+    time: s.t,
+    correct: s.c,
+    prevPos: prevPosMap[i] !== undefined ? prevPosMap[i] : -1
+  }))
+  entries.sort((a, b) => a.time - b.time)
+  // Assign new positions
+  entries.forEach((e, pos) => {
+    e.position = pos
+    e.gap = pos === 0 ? 0 : e.time - entries[0].time
+    e.medal = pos === 0 ? '🥇' : pos === 1 ? '🥈' : pos === 2 ? '🥉' : `${pos+1}.`
+    // Detect movement: prevPos - position > 0 = up, < 0 = down
+    if (e.prevPos >= 0 && e.prevPos !== pos) {
+      if (pos < e.prevPos) e.move = 'up'  // climbed
+      else e.move = 'down'                 // dropped
+    }
+  })
+  return entries
+})
 
 const maxAiScore = computed(() => {
   return aiScores.value.length > 0 ? Math.max(...aiScores.value) : 0
@@ -168,6 +201,15 @@ async function nextQuestion() {
   aiTimers = []
   aiPhaseTimers = []
 
+  // Store current positions as previous before updating
+  if (standings.value.length > 0) {
+    const sorted = standings.value.map((_, i) => i)
+    sorted.sort((a, b) => standings.value[a].t - standings.value[b].t)
+    prevPositions.value = sorted
+  } else {
+    prevPositions.value = new Array(standings.value.length).fill(0)
+  }
+
   // Setup AIs from server response
   if (data.ai_answers && data.ai_delays) {
     const n = Math.min(data.ai_answers.length, data.ai_delays.length)
@@ -193,6 +235,14 @@ async function nextQuestion() {
       }, aiDelays.value[i])
       aiTimers.push(timer)
     }
+  }
+
+  // Parse standings and question count from response
+  if (data.standings) {
+    standings.value = data.standings
+  }
+  if (data.questions !== undefined) {
+    questionsDone.value = data.questions
   }
 
   await nextTick()
@@ -245,6 +295,21 @@ onUnmounted(() => {
     </div>
 
     <div v-else>
+      <!-- 排行榜 (pái háng bǎng — live leaderboard) -->
+      <div class="leaderboard" v-if="standings.length > 0">
+        <div class="lb-title">🏁 排行榜 — Q{{ questionsDone }}/{{ total }}</div>
+        <div
+          v-for="entry in leaderboard"
+          :key="entry.idx"
+          class="lb-row"
+          :class="{ 'lb-move-up': entry.move === 'up', 'lb-move-down': entry.move === 'down' }"
+        >
+          <span class="lb-medal">{{ entry.medal }}</span>
+          <span class="lb-name" :class="{ 'lb-human': entry.idx === 0 }">{{ entry.name }}</span>
+          <span class="lb-time">{{ (entry.time / 1000).toFixed(1) }}s</span>
+          <span v-if="entry.gap > 0" class="lb-gap">+{{ (entry.gap / 1000).toFixed(1) }}s</span>
+        </div>
+      </div>
       <div v-if="!isVertical && parsedQuestion" class="question-text">
         {{ parsedQuestion.x }} {{ parsedQuestion.op }} {{ parsedQuestion.y }}
       </div>
@@ -330,4 +395,16 @@ onUnmounted(() => {
 .ai-revealed .ai-answer strong { font-family: 'Courier New', monospace; font-size: 1.1rem; }
 .ai-result-row { display: flex; align-items: center; gap: 0.5rem; }
 .ai-verdict { font-size: 0.85rem; font-weight: 600; }
+.leaderboard { background: rgba(0,0,0,0.25); border-radius: 10px; padding: 0.6rem; margin-bottom: 1rem; }
+.lb-title { font-size: 0.85rem; font-weight: 600; color: #ffd700; margin-bottom: 0.4rem; }
+.lb-row { display: flex; align-items: center; gap: 0.4rem; padding: 0.25rem 0; font-size: 0.9rem; border-radius: 6px; transition: box-shadow 0.4s; }
+.lb-medal { width: 1.6rem; text-align: center; }
+.lb-name { flex: 1; color: #ccc; }
+.lb-human { color: #fff; font-weight: 600; }
+.lb-time { font-family: 'Courier New', monospace; color: #fff; width: 3.5rem; text-align: right; }
+.lb-gap { font-family: 'Courier New', monospace; color: #888; width: 3.5rem; text-align: right; }
+.lb-move-up { animation: flash-up 0.8s ease-out; }
+.lb-move-down { animation: flash-down 0.8s ease-out; }
+@keyframes flash-up { 0% { box-shadow: inset 0 0 0 0 rgba(255,0,0,0.3); } 50% { box-shadow: inset 0 0 0 200px rgba(255,0,0,0.3); } 100% { box-shadow: inset 0 0 0 0 rgba(255,0,0,0); } }
+@keyframes flash-down { 0% { box-shadow: inset 0 0 0 0 rgba(0,100,255,0.3); } 50% { box-shadow: inset 0 0 0 200px rgba(0,100,255,0.3); } 100% { box-shadow: inset 0 0 0 0 rgba(0,100,255,0); } }
 </style>
