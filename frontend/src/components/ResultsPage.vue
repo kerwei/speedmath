@@ -1,6 +1,8 @@
 <script setup>
 import { ref, onMounted } from 'vue'
+import { useI18n } from '../composables/useI18n.js'
 
+const { t } = useI18n()
 const props = defineProps({ sessionId: String })
 const emit = defineEmits(['restart'])
 
@@ -18,14 +20,14 @@ onMounted(async () => {
 
 <template>
   <div class="card">
-    <h2>游戏结果 (yóuxì jiéguǒ — Game Results)</h2>
+    <h2>{{ t('results.title') }}</h2>
 
-    <div v-if="loading">加载中 (jiāzài zhōng — Loading)...</div>
+    <div v-if="loading">{{ t('results.loading') }}</div>
 
     <pre v-else class="results-pre">{{ results }}</pre>
 
     <button class="btn btn-primary" @click="emit('restart')" style="margin-top: 1.5rem">
-      再来一局 (zài lái yī jú — Play Again)
+      {{ t('results.playagain') }}
     </button>
   </div>
 </template>
