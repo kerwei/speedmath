@@ -33,8 +33,8 @@ TEST_CASE("AiOpponent: delay range") {
     AiOpponent hard(AiLevel::HARD);
     for (int i = 0; i < 20; i++) {
         int d = hard.delay_ms();
-        CHECK(d >= 500);
-        CHECK(d <= 1000);
+        CHECK(d >= 1500);
+        CHECK(d <= 2500);
     }
 }
 

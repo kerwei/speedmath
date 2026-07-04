@@ -19,8 +19,8 @@ AiOpponent::AiOpponent(AiLevel level) : _level(level) {
             break;
         case AiLevel::HARD:
             _accuracy = 1.0;
-            _min_delay = 500;
-            _max_delay = 1000;
+            _min_delay = 1500;
+            _max_delay = 2500;
             break;
     }
 }

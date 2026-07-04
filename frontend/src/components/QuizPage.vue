@@ -1,5 +1,5 @@
 <script setup>
-import { ref, computed, onMounted, nextTick } from 'vue'
+import { ref, computed, onMounted, onUnmounted, nextTick } from 'vue'
 
 const props = defineProps({ config: Object })
 const emit = defineEmits(['finish'])
@@ -18,11 +18,16 @@ const answerInput = ref(null)
 const hasAi = computed(() => props.config.ai_level > 0)
 const aiAnswer = ref('')
 const aiDelay = ref(0)
-const aiResult = ref('')
 const aiScore = ref(0)
-const aiThinking = ref(false)
-const aiRevealed = ref(false)
 const aiCorrect = ref(false)
+const aiFinished = ref(false)
+const aiAnswered = ref(false)
+const aiRevealed = ref(false)
+const aiPhase = ref('')  // '', 'reading', 'thinking'
+const playerAnswered = ref(false)
+const advancing = ref(false)
+let aiTimer = null
+let aiPhaseTimer = null
 
 const aiResultText = computed(() => aiCorrect.value ? '正确' : '错误')
 const aiResultClass = computed(() => aiCorrect.value ? 'result-correct' : 'result-wrong')
@@ -51,6 +56,40 @@ const parsedQuestion = computed(() => {
 })
 
 const isVertical = computed(() => props.config.vDisplay === 'vertical')
+
+// 计算 AI 正确性 (jìsuàn AI zhèngquèxìng — compute AI correctness)
+function computeAiCorrect() {
+  const p = parsedQuestion.value
+  if (!p) return false
+  const x = parseInt(p.x)
+  const y = parseInt(p.y)
+  if (p.isDiv) {
+    const parts = aiAnswer.value.split(' ')
+    if (parts.length === 2) {
+      const q = parseInt(parts[0])
+      const r = parseInt(parts[1])
+      return (q * y + r === x)
+    }
+    return false
+  } else if (p.op === '+') {
+    return parseInt(aiAnswer.value) === x + y
+  } else if (p.op === '-') {
+    return parseInt(aiAnswer.value) === x - y
+  } else if (p.op === '*') {
+    return parseInt(aiAnswer.value) === x * y
+  }
+  return false
+}
+
+// 尝试推进到下一题 (chángshì tuījìn dào xià yī tí — try to advance)
+function tryAdvance() {
+  if (advancing.value) return
+  if (playerAnswered.value && aiFinished.value) {
+    advancing.value = true
+    aiRevealed.value = true
+    setTimeout(() => nextQuestion(), 600)
+  }
+}
 
 async function apiCall(endpoint, data) {
   const params = new URLSearchParams(data)
@@ -89,15 +128,38 @@ async function nextQuestion() {
   question.value = data.question
   answer.value = ''
   result.value = ''
-  aiResult.value = ''
-  aiThinking.value = false
+  playerAnswered.value = false
+  aiFinished.value = false
+  aiAnswered.value = false
   aiRevealed.value = false
+  advancing.value = false
   aiCorrect.value = false
+  aiPhase.value = ''
+  if (aiTimer) clearTimeout(aiTimer)
+  if (aiPhaseTimer) clearTimeout(aiPhaseTimer)
+  aiTimer = null
+  aiPhaseTimer = null
 
-  // Store AI info if present
+  // Store AI info and start AI timer immediately
   if (hasAi.value && data.ai_answer) {
     aiAnswer.value = data.ai_answer
     aiDelay.value = parseInt(data.ai_delay_ms) || 2000
+
+    // Phase 1: reading (0 - 700ms)
+    aiPhase.value = 'reading'
+    aiPhaseTimer = setTimeout(() => {
+      // Phase 2: thinking (700ms - ai_delay)
+      aiPhase.value = 'thinking'
+    }, 700)
+
+    // AI finishes computing at ai_delay
+    aiTimer = setTimeout(() => {
+      if (computeAiCorrect()) aiScore.value++
+      aiCorrect.value = computeAiCorrect()
+      aiFinished.value = true
+      aiAnswered.value = true
+      tryAdvance()
+    }, aiDelay.value)
   }
 
   await nextTick()
@@ -114,42 +176,8 @@ async function submitAnswer() {
   if (data.result === 'correct') {
     score.value++
   }
-
-  // AI starts "thinking"
-  if (hasAi.value && !aiRevealed.value) {
-    aiThinking.value = true
-    setTimeout(() => {
-      // Compute AI correctness locally
-      const p = parsedQuestion.value
-      if (p) {
-        const x = parseInt(p.x)
-        const y = parseInt(p.y)
-        let correct = false
-        if (p.isDiv) {
-          const parts = aiAnswer.value.split(' ')
-          if (parts.length === 2) {
-            const q = parseInt(parts[0])
-            const r = parseInt(parts[1])
-            correct = (q * y + r === x)
-          }
-        } else if (p.op === '+') {
-          correct = parseInt(aiAnswer.value) === x + y
-        } else if (p.op === '-') {
-          correct = parseInt(aiAnswer.value) === x - y
-        } else if (p.op === '*') {
-          correct = parseInt(aiAnswer.value) === x * y
-        }
-        if (correct) aiScore.value++
-        aiCorrect.value = correct
-      }
-      aiThinking.value = false
-      aiRevealed.value = true
-    }, aiDelay.value)
-  }
-
-  // Auto-advance after player sees result and AI has answered
-  const waitTime = hasAi.value ? Math.max(aiDelay.value, 600) : 600
-  setTimeout(() => nextQuestion(), waitTime + 400)
+  playerAnswered.value = true
+  tryAdvance()
 }
 
 function onKeydown(e) {
@@ -160,6 +188,11 @@ function onKeydown(e) {
 
 onMounted(() => {
   newGame()
+})
+
+onUnmounted(() => {
+  if (aiTimer) clearTimeout(aiTimer)
+  if (aiPhaseTimer) clearTimeout(aiPhaseTimer)
 })
 </script>
 
@@ -209,12 +242,17 @@ onMounted(() => {
         ref="answerInput"
         class="answer-input"
         v-model="answer"
+        :disabled="playerAnswered"
         placeholder="输入答案 (shūrù dá'àn — enter answer)"
         @keydown="onKeydown"
         autofocus
       />
 
-      <button class="btn btn-primary" @click="submitAnswer" :disabled="!answer.trim()">
+      <button
+        class="btn btn-primary"
+        @click="submitAnswer"
+        :disabled="!answer.trim() || playerAnswered"
+      >
         提交 (tíjiāo — Submit)
       </button>
 
@@ -229,14 +267,20 @@ onMounted(() => {
 
       <!-- AI 结果 (AI jiéguǒ — AI result) -->
       <div v-if="hasAi" class="ai-section">
-        <div v-if="aiThinking" class="ai-thinking">
-          🤖 AI 思考中... (sīkǎo zhōng — thinking...)
-        </div>
-        <div v-else-if="aiRevealed" class="ai-revealed">
+        <div v-if="aiRevealed" class="ai-revealed">
           <div class="ai-result-row">
             <span class="ai-answer">🤖 AI: <strong>{{ aiAnswer }}</strong></span>
             <span class="ai-verdict" :class="aiResultClass">({{ aiResultText }})</span>
           </div>
+        </div>
+        <div v-else-if="aiAnswered" class="ai-thinking">
+          🤖 AI 已回答 (yǐ huídá — answered)
+        </div>
+        <div v-else-if="aiPhase === 'reading'" class="ai-thinking">
+          🤖 AI 正在读题... (zhèngzài dú tí — reading question...)
+        </div>
+        <div v-else-if="aiPhase === 'thinking'" class="ai-thinking">
+          🤖 AI 思考中... (sīkǎo zhōng — thinking...)
         </div>
       </div>
     </div>
