@@ -6,6 +6,7 @@ const emit = defineEmits(['start'])
 const diff = ref(1)
 const intense = ref(1)
 const vDisplay = ref('horizontal')
+const aiLevel = ref(0)
 const ops = ref({ '1': true, '2': true, '3': true, '4': true })
 
 function startGame() {
@@ -14,7 +15,13 @@ function startGame() {
     .map(([k]) => k)
     .join('')
 
-  emit('start', { diff: diff.value, intense: intense.value, ops: selected, vDisplay: vDisplay.value })
+  emit('start', {
+    diff: diff.value,
+    intense: intense.value,
+    ops: selected,
+    vDisplay: vDisplay.value,
+    ai_level: aiLevel.value
+  })
 }
 </script>
 
@@ -52,6 +59,16 @@ function startGame() {
           纵向 (zòngxiàng — Vertical) — <span class="stacked-preview">+ <span>3<br/>5</span></span>
         </label>
       </div>
+    </div>
+
+    <div class="form-group">
+      <label>AI 对手 (AI duìshǒu — AI Opponent)</label>
+      <select v-model.number="aiLevel">
+        <option :value="0">无 (wú — None)</option>
+        <option :value="1">简单 (jiǎndān — Easy) — ~60% 正确率</option>
+        <option :value="2">中等 (zhōngděng — Medium) — ~85% 正确率</option>
+        <option :value="3">困难 (kùnnán — Hard) — 100% 正确率</option>
+      </select>
     </div>
 
     <div class="form-group">

@@ -14,6 +14,19 @@ const finished = ref(false)
 const loading = ref(false)
 const answerInput = ref(null)
 
+// AI 对手状态 (AI duìshǒu zhuàngtài — AI opponent state)
+const hasAi = computed(() => props.config.ai_level > 0)
+const aiAnswer = ref('')
+const aiDelay = ref(0)
+const aiResult = ref('')
+const aiScore = ref(0)
+const aiThinking = ref(false)
+const aiRevealed = ref(false)
+const aiCorrect = ref(false)
+
+const aiResultText = computed(() => aiCorrect.value ? '正确' : '错误')
+const aiResultClass = computed(() => aiCorrect.value ? 'result-correct' : 'result-wrong')
+
 const progress = computed(() =>
   total.value > 0 ? (score.value / total.value) * 100 : 0
 )
@@ -54,7 +67,8 @@ async function newGame() {
   const data = await apiCall('/api/game/new', {
     diff: props.config.diff,
     intense: props.config.intense,
-    ops: props.config.ops
+    ops: props.config.ops,
+    ai_level: props.config.ai_level || 0
   })
   sessionId.value = data.session_id
   total.value = props.config.intense * 10
@@ -75,7 +89,17 @@ async function nextQuestion() {
   question.value = data.question
   answer.value = ''
   result.value = ''
-  // 自动聚焦到输入框 (zìdòng jùjiāo dào shūrù kuàng — auto-focus input)
+  aiResult.value = ''
+  aiThinking.value = false
+  aiRevealed.value = false
+  aiCorrect.value = false
+
+  // Store AI info if present
+  if (hasAi.value && data.ai_answer) {
+    aiAnswer.value = data.ai_answer
+    aiDelay.value = parseInt(data.ai_delay_ms) || 2000
+  }
+
   await nextTick()
   answerInput.value?.focus()
 }
@@ -90,8 +114,42 @@ async function submitAnswer() {
   if (data.result === 'correct') {
     score.value++
   }
-  // 自动进入下一题 (zìdòng jìnrù xià yī tí — auto-advance)
-  setTimeout(() => nextQuestion(), 600)
+
+  // AI starts "thinking"
+  if (hasAi.value && !aiRevealed.value) {
+    aiThinking.value = true
+    setTimeout(() => {
+      // Compute AI correctness locally
+      const p = parsedQuestion.value
+      if (p) {
+        const x = parseInt(p.x)
+        const y = parseInt(p.y)
+        let correct = false
+        if (p.isDiv) {
+          const parts = aiAnswer.value.split(' ')
+          if (parts.length === 2) {
+            const q = parseInt(parts[0])
+            const r = parseInt(parts[1])
+            correct = (q * y + r === x)
+          }
+        } else if (p.op === '+') {
+          correct = parseInt(aiAnswer.value) === x + y
+        } else if (p.op === '-') {
+          correct = parseInt(aiAnswer.value) === x - y
+        } else if (p.op === '*') {
+          correct = parseInt(aiAnswer.value) === x * y
+        }
+        if (correct) aiScore.value++
+        aiCorrect.value = correct
+      }
+      aiThinking.value = false
+      aiRevealed.value = true
+    }, aiDelay.value)
+  }
+
+  // Auto-advance after player sees result and AI has answered
+  const waitTime = hasAi.value ? Math.max(aiDelay.value, 600) : 600
+  setTimeout(() => nextQuestion(), waitTime + 400)
 }
 
 function onKeydown(e) {
@@ -107,8 +165,13 @@ onMounted(() => {
 
 <template>
   <div class="card">
-    <div class="score-text">
-      得分 (défēn — Score): {{ score }} / {{ total }}
+    <div class="score-row">
+      <div class="score-text">
+        😎 {{ score }} / {{ total }}
+      </div>
+      <div v-if="hasAi" class="score-text ai-score">
+        🤖 {{ aiScore }} / {{ total }}
+      </div>
     </div>
     <div class="progress-bar">
       <div class="progress-fill" :style="{ width: progress + '%' }"></div>
@@ -139,7 +202,7 @@ onMounted(() => {
       <!-- 除法提示 (chúfǎ tíshì — division hint) -->
       <div v-if="parsedQuestion?.isDiv" class="division-hint">
         输入: 商 余数 (shāng yúshù — quotient remainder)<br/>
-        例如 (example): 11 ÷ 7 → <kbd>1 4</kbd> 或 (or) <kbd>14</kbd>
+        例如 (example): 11 ÷ 7 → <kbd>1 4</kbd>
       </div>
 
       <input
@@ -155,18 +218,42 @@ onMounted(() => {
         提交 (tíjiāo — Submit)
       </button>
 
+      <!-- 玩家结果 (wánjiā jiéguǒ — player result) -->
       <div
         v-if="result"
         class="result-text"
         :class="result === 'correct' ? 'result-correct' : 'result-wrong'"
       >
-        {{ result === 'correct' ? '正确！ (zhèngquè — Correct!)' : '错误 (cuòwù — Wrong)' }}
+        玩家: {{ result === 'correct' ? '正确！ (zhèngquè — Correct!)' : '错误 (cuòwù — Wrong)' }}
+      </div>
+
+      <!-- AI 结果 (AI jiéguǒ — AI result) -->
+      <div v-if="hasAi" class="ai-section">
+        <div v-if="aiThinking" class="ai-thinking">
+          🤖 AI 思考中... (sīkǎo zhōng — thinking...)
+        </div>
+        <div v-else-if="aiRevealed" class="ai-revealed">
+          <div class="ai-result-row">
+            <span class="ai-answer">🤖 AI: <strong>{{ aiAnswer }}</strong></span>
+            <span class="ai-verdict" :class="aiResultClass">({{ aiResultText }})</span>
+          </div>
+        </div>
       </div>
     </div>
   </div>
 </template>
 
 <style scoped>
+.score-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.ai-score {
+  color: #48c6ef;
+}
+
 .question-vertical {
   display: flex;
   align-items: center;
@@ -209,5 +296,45 @@ onMounted(() => {
   padding: 0.1rem 0.4rem;
   font-family: 'Courier New', monospace;
   font-size: 0.9rem;
+}
+
+.ai-section {
+  margin-top: 1rem;
+  padding: 0.5rem;
+  border-radius: 8px;
+  background: rgba(72, 198, 239, 0.08);
+  border: 1px solid rgba(72, 198, 239, 0.15);
+}
+
+.ai-thinking {
+  color: #48c6ef;
+  font-size: 0.95rem;
+  animation: pulse 1.5s ease-in-out infinite;
+}
+
+@keyframes pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.4; }
+}
+
+.ai-revealed .ai-answer {
+  color: #48c6ef;
+  font-size: 1rem;
+}
+
+.ai-revealed .ai-answer strong {
+  font-family: 'Courier New', monospace;
+  font-size: 1.2rem;
+}
+
+.ai-result-row {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.ai-verdict {
+  font-size: 0.9rem;
+  font-weight: 600;
 }
 </style>
