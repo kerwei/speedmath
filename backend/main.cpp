@@ -7,8 +7,20 @@
 #include <thread>
 #include <unordered_map>
 #include <sstream>
+#include <iostream>
+#include <ctime>
 
 using namespace std;
+
+// 简单日志 (jiǎndān rìzhì — simple logger)
+static void log(const string& method, const string& path, const string& info = "") {
+    time_t now = time(nullptr);
+    char buf[20];
+    strftime(buf, sizeof buf, "%H:%M:%S", localtime(&now));
+    cerr << "[" << buf << "] " << method << " " << path;
+    if (!info.empty()) cerr << " " << info;
+    cerr << endl;
+}
 
 // 会话存储 (huìhuà chǔncún — session storage)
 // key = session ID, value = Manager*
@@ -62,6 +74,7 @@ int main() {
 
     // POST /api/game/new — 创建新游戏 (chuàngjiàn xīn yóuxì — create new game)
     svr.Post("/api/game/new", [](const httplib::Request& req, httplib::Response& res) {
+        log("POST", "/api/game/new", "diff=" + param_or(req, "diff", "1") + " intense=" + param_or(req, "intense", "1") + " ai_levels=" + param_or(req, "ai_levels", "0"));
         int diff = stoi(param_or(req, "diff", "1"));
         int intense = stoi(param_or(req, "intense", "1"));
         string ops_str = param_or(req, "ops", "1234");
@@ -122,8 +135,10 @@ int main() {
     // POST /api/game/question — 下一题 (xià yī tí — next question)
     svr.Post("/api/game/question", [](const httplib::Request& req, httplib::Response& res) {
         string sid = param_or(req, "session_id", "");
+        log("POST", "/api/game/question", "sid=" + sid.substr(0, 8) + "...");
         auto it = sessions.find(sid);
         if (it == sessions.end()) {
+            log("WARN", "session not found", "sid=" + sid.substr(0, 8) + "...");
             res.status = 404;
             res.set_content("{\"error\":\"session not found\"}", "application/json");
             return;
@@ -146,6 +161,15 @@ int main() {
                 }
                 json += "]";
             }
+            // Include current standings (updated from previous answer)
+            json += ",\"standings\":[";
+            for (int i = 0; i < game->player_count(); i++) {
+                if (i > 0) json += ",";
+                json += "{\"t\":" + to_string(game->player_cumulative_time(i));
+                json += ",\"c\":" + to_string(game->player_correct_count(i));
+                json += "}";
+            }
+            json += "],\"questions\": " + to_string(game->questions_answered());
             json += "}";
             res.set_content(json, "application/json");
         }
@@ -157,8 +181,10 @@ int main() {
     // POST /api/game/answer — 提交答案 (tíjiāo dá'àn — submit answer)
     svr.Post("/api/game/answer", [](const httplib::Request& req, httplib::Response& res) {
         string sid = param_or(req, "session_id", "");
+        log("POST", "/api/game/answer", "sid=" + sid.substr(0, 8) + "... answer=" + param_or(req, "answer", ""));
         auto it = sessions.find(sid);
         if (it == sessions.end()) {
+            log("WARN", "session not found (answer)", "sid=" + sid.substr(0, 8) + "...");
             res.status = 404;
             res.set_content("{\"error\":\"session not found\"}", "application/json");
             return;
@@ -168,14 +194,17 @@ int main() {
         string answer = param_or(req, "answer", "");
         string result = game->grade_answer(answer);
 
+        log("POST", "/api/game/answer", "result=" + result);
         res.set_content("{\"result\":\"" + result + "\"}", "application/json");
     });
 
     // GET /api/game/results — 最终结果 (zuìzhōng jiéguǒ — final results)
     svr.Get("/api/game/results", [](const httplib::Request& req, httplib::Response& res) {
         string sid = param_or(req, "session_id", "");
+        log("GET", "/api/game/results", "sid=" + sid.substr(0, 8) + "...");
         auto it = sessions.find(sid);
         if (it == sessions.end()) {
+            log("WARN", "session not found (results)", "sid=" + sid.substr(0, 8) + "...");
             res.status = 404;
             res.set_content("{\"error\":\"session not found\"}", "application/json");
             return;

@@ -3,6 +3,9 @@ import { ref } from 'vue'
 import WelcomePage from './components/WelcomePage.vue'
 import QuizPage from './components/QuizPage.vue'
 import ResultsPage from './components/ResultsPage.vue'
+import { useI18n } from './composables/useI18n.js'
+
+const { t, setLocale, locale } = useI18n()
 
 const page = ref('welcome')
 const sessionId = ref('')
@@ -23,11 +26,21 @@ function onRestart() {
   config.value = {}
   page.value = 'welcome'
 }
+
+function toggleLang() {
+  setLocale(locale.value === 'zh' ? 'en' : 'zh')
+}
 </script>
 
 <template>
   <div class="app-container">
-    <h1 class="app-title">🧮 SpeedMath 速算 (sùsuàn)</h1>
+    <div class="app-header">
+      <div class="app-title-block">
+        <h1 class="app-title">速算</h1>
+        <span class="app-subtitle">speedmath</span>
+      </div>
+      <button class="lang-toggle" @click="toggleLang">{{ locale === 'zh' ? 'EN' : '中' }}</button>
+    </div>
     <WelcomePage v-if="page === 'welcome'" @start="onStart" />
     <QuizPage
       v-else-if="page === 'quiz'"
@@ -41,3 +54,47 @@ function onRestart() {
     />
   </div>
 </template>
+
+<style scoped>
+.app-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  margin-bottom: 2rem;
+}
+
+.app-title-block {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+
+.app-title {
+  margin: 0;
+  font-size: 2.8rem;
+  letter-spacing: 0.25em;
+}
+
+.app-subtitle {
+  font-size: 0.8rem;
+  color: #888;
+  letter-spacing: 0.15em;
+  text-transform: lowercase;
+}
+
+.lang-toggle {
+  background: rgba(108, 99, 255, 0.15);
+  border: 1px solid rgba(108, 99, 255, 0.3);
+  color: #b0b0ff;
+  padding: 0.3rem 0.8rem;
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 0.85rem;
+  font-weight: 600;
+  transition: background 0.2s;
+}
+
+.lang-toggle:hover {
+  background: rgba(108, 99, 255, 0.3);
+}
+</style>

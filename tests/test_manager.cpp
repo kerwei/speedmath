@@ -183,9 +183,9 @@ TEST_CASE("Manager::print_results: format") {
     }
     m.updatescore();
     string results = m.print_results();
-    // Should contain key labels
-    CHECK(results.find("Elapsed") != string::npos);
-    CHECK(results.find("Score") != string::npos);
+    // Should contain racing-style results
+    CHECK(results.find("RACE") != string::npos);
+    CHECK(results.find("LEADERBOARD") != string::npos);
 }
 
 // ============================================================
