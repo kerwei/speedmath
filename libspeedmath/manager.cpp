@@ -3,6 +3,7 @@
 #include "manager.h"
 #include <fstream>
 #include <iomanip>
+#include <algorithm>
 
 
 Manager::Manager(const int diff, const int intense, const vector<Op>& ops, const vector<AiLevel>& ai_levels):
@@ -25,40 +26,35 @@ Manager::Manager(const int diff, const int intense, const vector<Op>& ops, const
         fcnPtr = &random_ge_two_digit;
     }
 
-    // Create AI opponents for each level in the vector
+    // Initialize player arrays: index 0 = human, 1+ = AI
+    _player_times.push_back(0);  // human
     for (AiLevel lvl : ai_levels) {
         _ais.push_back(new AiOpponent(lvl));
         _ai_answers.push_back("");
         _ai_delays.push_back(0);
+        _player_times.push_back(0);   // one per AI
+        _ai_correct_counts.push_back(0);
     }
 }
 
-std::string Manager::qnext() {
-    if (_qtotal <= 0) {
-        throw std::out_of_range("");
-    }
+string Manager::qnext() {
+    if (_qtotal <= 0) throw out_of_range("");
 
-    // Pick a random operator from the chosen set
     _op = _ops[std::rand() % _ops.size()];
-
     if (_op == Op::DIV) {
         int divisor = fcnPtr(_diff);
-        while (divisor == 0) {
-            divisor = fcnPtr(_diff);
-        }
-        int quotient = fcnPtr(_diff);
-        int remainder = std::rand() % divisor;
-        x = divisor * quotient + remainder;
+        while (divisor == 0) { divisor = fcnPtr(_diff); }
+        int q = fcnPtr(_diff);
+        int r = std::rand() % divisor;
+        x = divisor * q + r;
         y = divisor;
-    }
-    else {
+    } else {
         x = fcnPtr(_diff);
         y = fcnPtr(_diff);
     }
-
     _qtotal -= 1;
 
-    // 让所有 AI 对手决定答案 (let all AI opponents decide)
+    // AI opponents decide
     int correct = 0, r = 0;
     switch (_op) {
         case Op::ADD: correct = x + y; break;
@@ -66,16 +62,13 @@ std::string Manager::qnext() {
         case Op::MUL: correct = x * y; break;
         case Op::DIV: correct = x / y; r = x % y; break;
     }
-
     for (size_t i = 0; i < _ais.size(); i++) {
         _ai_answers[i] = _ais[i]->decide_answer(x, y, op_symbol(_op), correct, r);
         _ai_delays[i] = _ais[i]->delay_ms();
     }
 
-    // Start the timer
     _start_time = time(NULL);
-
-    return std::to_string(x) + " " + op_symbol(_op) + " " + std::to_string(y);
+    return to_string(x) + " " + op_symbol(_op) + " " + to_string(y);
 }
 
 void Manager::_grade_ai_answers() {
@@ -86,7 +79,6 @@ void Manager::_grade_ai_answers() {
         case Op::MUL: correct = x * y; break;
         case Op::DIV: correct = x / y; r = x % y; break;
     }
-
     for (size_t i = 0; i < _ais.size(); i++) {
         bool ai_correct = false;
         if (_op == Op::DIV) {
@@ -100,71 +92,94 @@ void Manager::_grade_ai_answers() {
             ai_correct = (stoi(_ai_answers[i]) == correct);
         }
         _ais[i]->record(ai_correct, _ai_delays[i]);
+        if (ai_correct) { _ai_correct_counts[i]++; }
     }
 }
 
-std::string Manager::grade_answer(const int answer) {
-    _elapsed += (time(NULL) - _start_time);
+void Manager::_apply_racing_scores(long human_question_time_ms, bool human_correct) {
+    int total = 1 + _ais.size();  // human + AIs
 
-    bool correct = check_answer(_op, x, y, answer);
-    if (correct) {
-        score += 1;
+    // Collect times and correctness for this question
+    vector<long> times(total);
+    vector<bool> corrects(total);
+    times[0] = human_question_time_ms;
+    corrects[0] = human_correct;
+
+    for (int i = 0; i < (int)_ais.size(); i++) {
+        times[1 + i] = _ai_delays[i];
+        corrects[1 + i] = (_ai_correct_counts[i] > 0);
     }
+
+    // Find slowest correct time
+    long slowest_correct = 0;
+    for (int i = 0; i < total; i++) {
+        if (corrects[i] && times[i] > slowest_correct) {
+            slowest_correct = times[i];
+        }
+    }
+
+    // If nobody got it correct, all get slowest_correct (0) + penalty
+    // If there's at least one correct, wrong answers get slowest_correct + penalty
+    for (int i = 0; i < total; i++) {
+        if (!corrects[i]) {
+            times[i] = slowest_correct + PENALTY_MS;
+        }
+        _player_times[i] += times[i];
+    }
+}
+
+string Manager::grade_answer(const int answer) {
+    _elapsed += (time(NULL) - _start_time);
+    bool correct = check_answer(_op, x, y, answer);
+    if (correct) { score++; _human_correct_count++; }
     _grade_ai_answers();
+    _apply_racing_scores((time(NULL) - _start_time) * 1000, correct);
     return correct ? "correct" : "wrong";
 }
 
-std::string Manager::grade_answer(const string& answer) {
-    _elapsed += (time(NULL) - _start_time);
+string Manager::grade_answer(const string& answer) {
+    long elapsed_ms = (time(NULL) - _start_time) * 1000;
+    _elapsed += elapsed_ms / 1000;
+    bool human_correct = false;
 
     if (_op == Op::DIV) {
         size_t space = answer.find(' ');
-
         if (space != string::npos) {
             if (isNumber(answer.substr(0, space)) && isNumber(answer.substr(space + 1))) {
                 int q = stoi(answer.substr(0, space));
                 int r = stoi(answer.substr(space + 1));
-                if (check_answer(_op, x, y, q, r)) {
-                    score += 1;
-                    _grade_ai_answers();
-                    return "correct";
+                human_correct = check_answer(_op, x, y, q, r);
+            }
+        } else {
+            // Concatenated format
+            if (isNumber(answer) && answer[0] != '-') {
+                for (size_t split = 1; split < answer.size(); split++) {
+                    int q = stoi(answer.substr(0, split));
+                    int rem = stoi(answer.substr(split));
+                    if (check_answer(_op, x, y, q, rem)) {
+                        human_correct = true;
+                        break;
+                    }
                 }
             }
-            _grade_ai_answers();
-            return "wrong";
         }
-
-        // Concatenated format
-        if (!isNumber(answer) || answer[0] == '-') {
-            _grade_ai_answers();
-            return "wrong";
-        }
-        for (size_t split = 1; split < answer.size(); split++) {
-            int q = stoi(answer.substr(0, split));
-            int r = stoi(answer.substr(split));
-            if (check_answer(_op, x, y, q, r)) {
-                score += 1;
-                _grade_ai_answers();
-                return "correct";
-            }
-        }
-        _grade_ai_answers();
-        return "wrong";
-    }
-    else {
-        if (!isNumber(answer)) {
-            _grade_ai_answers();
-            return "wrong";
-        }
-        if (check_answer(_op, x, y, stoi(answer))) {
-            score += 1;
-            _grade_ai_answers();
-            return "correct";
+    } else {
+        if (isNumber(answer)) {
+            human_correct = check_answer(_op, x, y, stoi(answer));
         }
     }
 
+    if (human_correct) { score++; _human_correct_count++; }
     _grade_ai_answers();
-    return "wrong";
+    _apply_racing_scores(elapsed_ms, human_correct);
+    return human_correct ? "correct" : "wrong";
+}
+
+int Manager::player_correct_count(int idx) const {
+    if (idx == 0) return _human_correct_count;
+    int ai_idx = idx - 1;
+    if (ai_idx < (int)_ai_correct_counts.size()) return _ai_correct_counts[ai_idx];
+    return 0;
 }
 
 int Manager::ai_total_score() const {
@@ -179,123 +194,106 @@ long Manager::ai_total_elapsed_ms() const {
     return e;
 }
 
-std::string Manager::print_results() {
-    _ss << "Elapsed: " << _elapsed << " seconds" << std::endl;
-    _ss << "Score: " << score << "/" << _intense * 10 << std::endl;
-    if (score > 0) {
-        _ss << "Speed: " << fixed << setprecision(5) << (double) _elapsed/score << " seconds per hit" << std::endl;
+string Manager::print_results() {
+    _ss << "=== RACE RESULTS (赛车结果) ===" << endl << endl;
+    int total = player_count();
+    int q_count = _intense * 10;
+
+    // Print each player's stats
+    string level_names[] = {"Easy", "Medium", "Hard"};
+    for (int i = 0; i < total; i++) {
+        string name;
+        if (i == 0) {
+            name = "Human";
+        } else {
+            int ai_idx = i - 1;
+            string lvl = level_names[static_cast<int>(_ais[ai_idx]->level())];
+            name = "AI" + to_string(ai_idx + 1) + " (" + lvl + ")";
+        }
+        double t_sec = _player_times[i] / 1000.0;
+        _ss << name << ": " << player_correct_count(i) << "/" << q_count
+            << ", Time: " << fixed << setprecision(1) << t_sec << "s" << endl;
     }
 
-    if (!_ais.empty()) {
-        _ss << std::endl;
-        _ss << "--- AI 对手们 (AI Opponents) ---" << std::endl;
-        string level_names[] = {"Easy", "Medium", "Hard"};
-        int best_ai_score = -1;
-        for (size_t i = 0; i < _ais.size(); i++) {
-            int ai_total_v = _ais[i]->total();
-            int ai_score_v = _ais[i]->score();
-            double ai_time_sec = _ais[i]->elapsed_ms() / 1000.0;
-            string lvl_name = level_names[static_cast<int>(_ais[i]->level())];
-            _ss << "AI" << (i+1) << " (" << lvl_name << "): "
-                << ai_score_v << "/" << ai_total_v;
-            if (ai_score_v > 0) {
-                _ss << ", Speed: " << fixed << setprecision(3) << ai_time_sec / ai_score_v << "s/hit";
-            }
-            _ss << std::endl;
-            if (ai_score_v > best_ai_score) best_ai_score = ai_score_v;
-        }
+    // Sort by cumulative time to determine leaderboard
+    vector<int> order(total);
+    for (int i = 0; i < total; i++) order[i] = i;
+    sort(order.begin(), order.end(), [this](int a, int b) {
+        return _player_times[a] < _player_times[b];
+    });
 
-        _ss << std::endl;
-        if (score > best_ai_score) {
-            _ss << "结果: 玩家胜! (Player wins!)" << std::endl;
-        } else if (score < best_ai_score) {
-            _ss << "结果: AI 胜! (AI wins!)" << std::endl;
+    _ss << endl << "--- LEADERBOARD (排行榜) ---" << endl;
+    double leader_time = _player_times[order[0]] / 1000.0;
+    for (int i = 0; i < total; i++) {
+        int pi = order[i];
+        double t_sec = _player_times[pi] / 1000.0;
+        double gap = (pi == order[0]) ? 0.0 : (t_sec - leader_time);
+        string pos;
+        if (i == 0) pos = "🥇";
+        else if (i == 1) pos = "🥈";
+        else if (i == 2) pos = "🥉";
+        else pos = to_string(i + 1) + ".";
+
+        string name;
+        if (pi == 0) {
+            name = "Human";
         } else {
-            _ss << "结果: 平局! (Draw!)" << std::endl;
+            int ai_idx = pi - 1;
+            string lvl = level_names[static_cast<int>(_ais[ai_idx]->level())];
+            name = "AI" + to_string(ai_idx + 1) + "(" + lvl + ")";
         }
+        _ss << pos << " " << name << " — " << fixed << setprecision(1) << t_sec << "s";
+        if (gap > 0.0) _ss << " (+" << fixed << setprecision(1) << gap << "s)";
+        _ss << endl;
     }
 
     return _ss.str();
 }
 
-void Manager::updatescore() {
-    update_hit();
-    update_elapsed();
-}
+void Manager::updatescore() { update_hit(); update_elapsed(); }
 
 void Manager::update_hit() {
     int rows = _correct_board.size();
-    int columns = _correct_board[0].size();
-
+    int cols = _correct_board[0].size();
     if (_intense >= rows) {
-        std::vector<int> new_row(columns, -1);
-        std::vector<std::vector<int>> new_block(_intense - rows + 1, new_row);
-        _correct_board.insert(_correct_board.end(), new_block.begin(), new_block.end());
+        _correct_board.insert(_correct_board.end(), _intense - rows + 1, vector<int>(cols, -1));
     }
-
-    if (_diff >= columns) {
-        for (int j = 0; j <= _intense; j++) {
-            std::vector<int>::iterator it = _correct_board[j].end();
-            _correct_board[j].insert(it, _diff - columns + 1, -1);
-        }
+    if (_diff >= cols) {
+        for (auto& row : _correct_board) row.insert(row.end(), _diff - cols + 1, -1);
     }
-
     _correct_board[_intense][_diff] = score;
 }
 
 void Manager::update_elapsed() {
     int rows = _elapsed_board.size();
-    int columns = _elapsed_board[0].size();
-
+    int cols = _elapsed_board[0].size();
     if (_intense >= rows) {
-        std::vector<long> new_row(columns, -1);
-        std::vector<std::vector<long>> new_block(_intense - rows + 1, new_row);
-        _elapsed_board.insert(_elapsed_board.end(), new_block.begin(), new_block.end());
+        _elapsed_board.insert(_elapsed_board.end(), _intense - rows + 1, vector<long>(cols, -1));
     }
-
-    if (_diff >= columns) {
-        for (int j = 0; j <= _intense; j++) {
-            std::vector<long>::iterator it = _elapsed_board[j].end();
-            _elapsed_board[j].insert(it, _diff - columns + 1, -1);
-        }
+    if (_diff >= cols) {
+        for (auto& row : _elapsed_board) row.insert(row.end(), _diff - cols + 1, -1);
     }
-
     _elapsed_board[_intense][_diff] = _elapsed;
 }
 
-void Manager::savehighscore() {
-    save_correct_count();
-    save_elapsed();
-}
+void Manager::savehighscore() { save_correct_count(); save_elapsed(); }
 
 void Manager::save_correct_count() {
-    ofstream savefile;
-    savefile.open("correct.txt");
-
-    const int cols = _correct_board[0].size();
-    for (int i = 0; i < _correct_board.size(); i++) {
-        for (int j = 0; j < cols - 1; j++) {
-            savefile << _correct_board[i][j] << " ";
+    ofstream f("correct.txt");
+    for (auto& row : _correct_board) {
+        for (size_t j = 0; j < row.size(); j++) {
+            f << row[j] << (j + 1 < row.size() ? " " : "");
         }
-
-        savefile << _correct_board[i][cols -1] << std::endl;
+        f << endl;
     }
-
-    savefile.close();
 }
 
 void Manager::save_elapsed() {
-    ofstream savefile;
-    savefile.open("elapsed.txt");
-
-    const int cols = _elapsed_board[0].size();
-    for (int i = 0; i < _elapsed_board.size(); i++) {
-        for (int j = 0; j < cols - 1; j++) {
-            savefile << _elapsed_board[i][j] << " ";
+    ofstream f("elapsed.txt");
+    for (auto& row : _elapsed_board) {
+        for (size_t j = 0; j < row.size(); j++) {
+            f << row[j] << (j + 1 < row.size() ? " " : "");
         }
-
-        savefile << _elapsed_board[i][cols -1] << std::endl;
+        f << endl;
     }
-
-    savefile.close();
 }
