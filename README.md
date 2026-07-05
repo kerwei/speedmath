@@ -110,7 +110,7 @@ xmake f -m debug          # switch to debug mode
 - [x] Four arithmetic operators (+ - * /)
 - [x] Web frontend (Vue 3 SPA)
 - [x] C++ HTTP backend (cpp-httplib)
-- [ ] AI opponent mode
+- [x] AI opponent mode
 - [ ] Multiplayer competition
 - [ ] Android port
 

@@ -31,6 +31,9 @@ const aiPhase = ref([])
 let aiTimers = []
 let aiPhaseTimers = []
 
+// Countdown state (null = hidden, 3/2/1 = counting, 0 = "Go!")
+const countdown = ref(null)
+
 // Timer
 const timerMs = ref(0)
 const flashPlayer = ref(null) // index that just submitted, for flash
@@ -283,7 +286,22 @@ async function submitAnswer() {
 
 function onKeydown(e) { if (e.key === 'Enter') submitAnswer() }
 
-onMounted(() => newGame())
+function startCountdown() {
+  countdown.value = 3
+  const interval = setInterval(() => {
+    countdown.value--
+    if (countdown.value === 0) {
+      clearInterval(interval)
+      // Show "Go!" for 700ms, then start game
+      setTimeout(() => {
+        countdown.value = null
+        newGame()
+      }, 700)
+    }
+  }, 1000)
+}
+
+onMounted(() => startCountdown())
 onUnmounted(() => {
   if (timerInterval) clearInterval(timerInterval)
   aiTimers.forEach(t => clearTimeout(t)); aiPhaseTimers.forEach(t => clearTimeout(t))
@@ -292,6 +310,13 @@ onUnmounted(() => {
 
 <template>
   <div class="card">
+    <!-- Race countdown overlay (first question only) -->
+    <div v-if="countdown !== null" class="countdown-overlay">
+      <div class="countdown-number" :key="countdown">
+        {{ countdown > 0 ? countdown : t('quiz.countdown.go') }}
+      </div>
+    </div>
+
     <div class="score-row">
       <div class="score-text">😎 {{ score }} / {{ total }}</div>
       <div v-for="i in aiCount" :key="'ai'+i" class="score-text ai-score">🤖{{ t('ai.prefix') }}{{ i }} {{ aiScores[i-1] || 0 }}/{{ total }}</div>
@@ -393,4 +418,11 @@ onUnmounted(() => {
 .lb-time { font-family: 'Courier New', monospace; color: #fff; width: 3.5rem; text-align: right; flex-shrink: 0; }
 .lb-gap { font-family: 'Courier New', monospace; color: #888; width: 3.5rem; text-align: right; flex-shrink: 0; }
 .lb-waiting { opacity: 0.45; }
+
+/* Need position:relative on card for absolute countdown overlay */
+.card { position: relative; }
+
+.countdown-overlay { position: absolute; inset: 0; background: rgba(0,0,0,0.85); display: flex; align-items: center; justify-content: center; z-index: 10; border-radius: 10px; }
+.countdown-number { font-size: 5rem; font-weight: 700; color: #fff; animation: countdown-pop 0.6s ease-out; }
+@keyframes countdown-pop { 0% { transform: scale(2.5); opacity: 0; } 40% { transform: scale(1); opacity: 1; } 100% { transform: scale(0.9); opacity: 0.8; } }
 </style>
