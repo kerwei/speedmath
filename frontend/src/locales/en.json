@@ -39,6 +39,7 @@
   "quiz.correct": "Correct!",
   "quiz.wrong": "Wrong",
   "quiz.evaluating": "Evaluating...",
+  "quiz.submitted": "Submitted",
   "quiz.div.hint": "Enter: quotient remainder",
   "quiz.div.example": "Example",
   "quiz.ai.answered": "Answered",

@@ -39,6 +39,7 @@
   "quiz.correct": "正确！",
   "quiz.wrong": "错误",
   "quiz.evaluating": "评估中...",
+  "quiz.submitted": "已提交",
   "quiz.div.hint": "输入: 商 余数",
   "quiz.div.example": "例如",
   "quiz.ai.answered": "已回答",
