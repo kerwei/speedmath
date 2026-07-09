@@ -1,11 +1,15 @@
 <script setup>
 import { ref } from 'vue'
 import WelcomePage from './components/WelcomePage.vue'
+import AuthPage from './components/AuthPage.vue'
+import LobbyPage from './components/LobbyPage.vue'
 import QuizPage from './components/QuizPage.vue'
 import ResultsPage from './components/ResultsPage.vue'
 import { useI18n } from './composables/useI18n.js'
+import { useAuth } from './composables/useAuth.js'
 
 const { t, setLocale, locale } = useI18n()
+const { isLoggedIn } = useAuth()
 
 const page = ref('welcome')
 const sessionId = ref('')
@@ -16,6 +20,14 @@ function onStart(cfg) {
   page.value = 'quiz'
 }
 
+function onMultiplayer() {
+  page.value = isLoggedIn() ? 'lobby' : 'auth'
+}
+
+function onAuthDone() {
+  page.value = 'lobby'
+}
+
 function onFinish(sid) {
   sessionId.value = sid
   page.value = 'results'
@@ -24,6 +36,10 @@ function onFinish(sid) {
 function onRestart() {
   sessionId.value = ''
   config.value = {}
+  page.value = 'welcome'
+}
+
+function onBackFromLobby() {
   page.value = 'welcome'
 }
 
@@ -41,7 +57,9 @@ function toggleLang() {
       </div>
       <button class="lang-toggle" @click="toggleLang">{{ locale === 'zh' ? 'EN' : '中' }}</button>
     </div>
-    <WelcomePage v-if="page === 'welcome'" @start="onStart" />
+    <WelcomePage v-if="page === 'welcome'" @start="onStart" @multiplayer="onMultiplayer" />
+    <AuthPage v-else-if="page === 'auth'" @done="onAuthDone" />
+    <LobbyPage v-else-if="page === 'lobby'" @back="onBackFromLobby" />
     <QuizPage
       v-else-if="page === 'quiz'"
       :config="config"

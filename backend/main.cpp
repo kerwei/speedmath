@@ -172,10 +172,12 @@ int main() {
 
         UserRow* u = db.find_user_by_email(email);
         string token = generate_token();
-        db.save_token(token, u->id);
+        int uid = u->id;
+        db.save_token(token, uid);
         delete u;
 
-        res.set_content("{\"token\":\"" + token + "\"}", "application/json");
+        res.set_content("{\"token\":\"" + token + "\",\"user_id\":" + to_string(uid) + "}", "application/json");
+        log("POST", "/api/auth/register", "email=" + email + " uid=" + to_string(uid));
     });
 
     // POST /api/auth/login — 登录 (dēnglù — login)
@@ -199,10 +201,11 @@ int main() {
         }
 
         string token = generate_token();
-        db.save_token(token, u->id);
+        int uid = u->id;
+        db.save_token(token, uid);
         delete u;
 
-        res.set_content("{\"token\":\"" + token + "\"}", "application/json");
+        res.set_content("{\"token\":\"" + token + "\",\"user_id\":" + to_string(uid) + "}", "application/json");
     });
 
     // ── Room endpoints ──
