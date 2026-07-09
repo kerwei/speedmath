@@ -40,7 +40,7 @@
   "quiz.wrong": "错误",
   "quiz.evaluating": "评估中...",
   "quiz.submitted": "已提交",
-  "quiz.div.hint": "输入: 商 余数",
+  "quiz.div.hint": "输入: 商 余数（无余数可只填商）",
   "quiz.div.example": "例如",
   "quiz.ai.answered": "已回答",
   "quiz.ai.reading": "正在读题...",
@@ -50,6 +50,14 @@
   "results.title": "游戏结果",
   "results.loading": "加载中...",
   "results.playagain": "再来一局",
+  "results.leaderboard": "排行榜",
+  "results.correct": "正确",
+  "results.time": "用时",
+  "results.gap": "差距",
+  "results.difficulty": "难度",
+  "results.easy": "简单",
+  "results.medium": "中等",
+  "results.hard": "困难",
 
   "human": "玩家",
   "ai.prefix": "AI"

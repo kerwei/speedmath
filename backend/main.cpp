@@ -198,7 +198,7 @@ int main() {
         res.set_content("{\"result\":\"" + result + "\"}", "application/json");
     });
 
-    // GET /api/game/results — 最终结果 (zuìzhōng jiéguǒ — final results)
+    // GET /api/game/results
     svr.Get("/api/game/results", [](const httplib::Request& req, httplib::Response& res) {
         string sid = param_or(req, "session_id", "");
         log("GET", "/api/game/results", "sid=" + sid.substr(0, 8) + "...");
@@ -212,21 +212,36 @@ int main() {
 
         Manager* game = it->second;
         game->updatescore();
-        string output = game->print_results();
         game->savehighscore();
+
+        int total_q = game->questions_answered();
+        int n = game->player_count();
+
+        // Build players JSON array
+        string players_json = "[";
+        for (int i = 0; i < n; i++) {
+            if (i > 0) players_json += ",";
+            string type = (i == 0) ? "\"human\"" : "\"ai\"";
+            string level_str = "null";
+            if (i > 0) {
+                level_str = to_string(static_cast<int>(game->ai_level(i - 1)));
+            }
+            players_json += "{";
+            players_json += "\"idx\":" + to_string(i) + ",";
+            players_json += "\"type\":" + type + ",";
+            players_json += "\"level\":" + level_str + ",";
+            players_json += "\"correct\":" + to_string(game->player_correct_count(i)) + ",";
+            players_json += "\"total\":" + to_string(total_q) + ",";
+            players_json += "\"time_ms\":" + to_string(game->player_cumulative_time(i));
+            players_json += "}";
+        }
+        players_json += "]";
 
         delete game;
         sessions.erase(sid);
 
-        string escaped;
-        for (char c : output) {
-            if (c == '"') escaped += "\\\"";
-            else if (c == '\n') escaped += "\\n";
-            else escaped += c;
-        }
-
         res.set_content(
-            "{\"results\":\"" + escaped + "\"}",
+            "{\"players\":" + players_json + "}",
             "application/json"
         );
     });

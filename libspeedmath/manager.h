@@ -30,6 +30,7 @@ class Manager {
         long ai_elapsed_ms(int idx) const { return _ais[idx]->elapsed_ms(); }
         int ai_total_score() const;
         long ai_total_elapsed_ms() const;
+        AiLevel ai_level(int idx) const { return _ais[idx]->level(); }
 
         // 赛车积分: 累计时间 (ms), 0 = human, 1+ = AI
         int player_count() const { return 1 + _ais.size(); }

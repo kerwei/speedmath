@@ -154,13 +154,19 @@ string Manager::grade_answer(const string& answer) {
         } else {
             // Concatenated format
             if (isNumber(answer) && answer[0] != '-') {
+                bool matched = false;
                 for (size_t split = 1; split < answer.size(); split++) {
                     int q = stoi(answer.substr(0, split));
                     int rem = stoi(answer.substr(split));
                     if (check_answer(_op, x, y, q, rem)) {
                         human_correct = true;
+                        matched = true;
                         break;
                     }
+                }
+                // No-remainder: accept plain quotient (e.g. "4" for 12÷3)
+                if (!matched && check_answer(_op, x, y, stoi(answer), 0)) {
+                    human_correct = true;
                 }
             }
         }

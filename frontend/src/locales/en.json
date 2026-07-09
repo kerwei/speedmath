@@ -40,7 +40,7 @@
   "quiz.wrong": "Wrong",
   "quiz.evaluating": "Evaluating...",
   "quiz.submitted": "Submitted",
-  "quiz.div.hint": "Enter: quotient remainder",
+  "quiz.div.hint": "Enter: quotient remainder (omit remainder if none)",
   "quiz.div.example": "Example",
   "quiz.ai.answered": "Answered",
   "quiz.ai.reading": "Reading question...",
@@ -50,6 +50,14 @@
   "results.title": "Game Results",
   "results.loading": "Loading...",
   "results.playagain": "Play Again",
+  "results.leaderboard": "Leaderboard",
+  "results.correct": "Correct",
+  "results.time": "Time",
+  "results.gap": "Gap",
+  "results.difficulty": "Difficulty",
+  "results.easy": "Easy",
+  "results.medium": "Medium",
+  "results.hard": "Hard",
 
   "human": "You",
   "ai.prefix": "AI"
