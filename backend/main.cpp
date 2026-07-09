@@ -3,12 +3,14 @@
 
 #include "httplib.h"
 #include "../libspeedmath/manager.h"
+#include "db.h"
 #include <signal.h>
 #include <thread>
 #include <unordered_map>
 #include <sstream>
 #include <iostream>
 #include <ctime>
+#include <functional>
 
 using namespace std;
 
@@ -31,6 +33,60 @@ static string generate_id() {
     stringstream ss;
     ss << std::hex << std::rand();
     return ss.str();
+}
+
+// ── Database singleton ──
+static Db db("speedmath.db");
+
+// ── Password & auth helpers ──
+static string random_salt(size_t len = 16) {
+    static const char chars[] = "abcdefghijklmnopqrstuvwxyz0123456789";
+    string s;
+    srand(time(nullptr) ^ (rand() << 16));
+    for (size_t i = 0; i < len; i++) s += chars[rand() % (sizeof(chars) - 1)];
+    return s;
+}
+
+// FNV-1a hash — fully deterministic across calls and platforms
+static size_t fnv1a(const string& s) {
+    size_t h = 14695981039346656037ULL;
+    for (char c : s) { h ^= static_cast<size_t>(c); h *= 1099511628211ULL; }
+    return h;
+}
+
+static string hash_password(const string& pw, const string& salt) {
+    stringstream ss;
+    ss << salt << "$" << hex << fnv1a(salt + ":" + pw);
+    return ss.str();
+}
+
+static bool verify_password(const string& pw, const string& stored) {
+    size_t dollar = stored.find('$');
+    if (dollar == string::npos) return false;
+    return hash_password(pw, stored.substr(0, dollar)) == stored;
+}
+
+static string generate_token() {
+    static const char chars[] = "abcdefghijklmnopqrstuvwxyz0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ";
+    string s;
+    for (int i = 0; i < 64; i++) s += chars[rand() % (sizeof(chars) - 1)];
+    return s;
+}
+
+static int require_auth(const httplib::Request& req, httplib::Response& res) {
+    string auth = req.get_header_value("Authorization", "");
+    if (auth.substr(0, 7) != "Bearer ") {
+        res.status = 401;
+        res.set_content("{\"error\":\"missing auth\"}", "application/json");
+        return -1;
+    }
+    int uid = db.find_user_by_token(auth.substr(7));
+    if (uid < 0) {
+        res.status = 401;
+        res.set_content("{\"error\":\"invalid token\"}", "application/json");
+        return -1;
+    }
+    return uid;
 }
 
 // 辅助函数 (fǔzhù hánshù — helper): get param with fallback
@@ -70,6 +126,67 @@ int main() {
 
     svr.Options(".*", [](const httplib::Request& req, httplib::Response& res) {
         res.status = 204;
+    });
+
+    // ── Auth endpoints ──
+
+    // POST /api/auth/register — 注册 (zhùcè — register)
+    svr.Post("/api/auth/register", [](const httplib::Request& req, httplib::Response& res) {
+        string email = param_or(req, "email", "");
+        string password = param_or(req, "password", "");
+        log("POST", "/api/auth/register", "email=" + email);
+
+        if (email.empty() || password.size() < 4) {
+            res.status = 400;
+            res.set_content("{\"error\":\"invalid input\"}", "application/json");
+            return;
+        }
+
+        if (db.find_user_by_email(email)) {
+            res.status = 409;
+            res.set_content("{\"error\":\"email taken\"}", "application/json");
+            return;
+        }
+
+        if (!db.create_user(email, hash_password(password, random_salt()))) {
+            res.status = 500;
+            res.set_content("{\"error\":\"create failed\"}", "application/json");
+            return;
+        }
+
+        UserRow* u = db.find_user_by_email(email);
+        string token = generate_token();
+        db.save_token(token, u->id);
+        delete u;
+
+        res.set_content("{\"token\":\"" + token + "\"}", "application/json");
+    });
+
+    // POST /api/auth/login — 登录 (dēnglù — login)
+    svr.Post("/api/auth/login", [](const httplib::Request& req, httplib::Response& res) {
+        string email = param_or(req, "email", "");
+        string password = param_or(req, "password", "");
+        log("POST", "/api/auth/login", "email=" + email);
+
+        if (email.empty() || password.empty()) {
+            res.status = 400;
+            res.set_content("{\"error\":\"invalid input\"}", "application/json");
+            return;
+        }
+
+        UserRow* u = db.find_user_by_email(email);
+        if (!u || !verify_password(password, u->password_hash)) {
+            res.status = 401;
+            res.set_content("{\"error\":\"invalid credentials\"}", "application/json");
+            delete u;
+            return;
+        }
+
+        string token = generate_token();
+        db.save_token(token, u->id);
+        delete u;
+
+        res.set_content("{\"token\":\"" + token + "\"}", "application/json");
     });
 
     // POST /api/game/new — 创建新游戏 (chuàngjiàn xīn yóuxì — create new game)
