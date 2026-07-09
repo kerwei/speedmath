@@ -94,9 +94,10 @@ xmake                     # build all targets
 xmake build backend       # build only the backend
 xmake build speedmath     # build only the console version
 xmake build test_db       # build database unit test
+xmake run speedmath       # build and run console version
+xmake run backend         # build and run backend server
 xmake run test_db         # run database unit test
 xmake run tests           # run all C++ unit tests
-xmake run                 # build and run console version
 xmake clean               # clean build artifacts
 xmake f -m debug          # switch to debug mode
 ```
@@ -107,6 +108,11 @@ xmake f -m debug          # switch to debug mode
 |---|---|---|---|
 | POST | `/api/auth/register` | No | Register new user (email + password) |
 | POST | `/api/auth/login` | No | Login, returns auth token |
+| POST | `/api/room/create` | Yes | Create a room, returns 4-char code |
+| POST | `/api/room/join` | Yes | Join a room by code |
+| POST | `/api/room/leave` | Yes | Leave a room |
+| POST | `/api/room/ready` | Yes | Toggle ready status |
+| GET | `/api/room/status` | Yes | Get room info + players + ready states |
 | POST | `/api/game/new` | No | Create a new game session |
 | POST | `/api/game/question` | No | Get the next question |
 | POST | `/api/game/answer` | No | Submit an answer |
@@ -121,7 +127,7 @@ xmake f -m debug          # switch to debug mode
 - [x] Internationalization (中文 / English)
 - [x] SQLite database for user/room storage
 - [x] User registration and login (token-based auth)
-- [ ] Room system (create / join / ready)
+- [x] Room system (create / join / ready / leave / status)
 - [ ] Real-time multiplayer (WebSocket)
 - [ ] Multiplayer game loop
 - [ ] Android port
