@@ -17,7 +17,7 @@ int main() {
     assert(u->password_hash == "hash123");
     delete u;
 
-    u = db.find_user_by_id(3);
+    u = db.find_user_by_id(6);
     assert(u);
     assert(u->email == "bob@test.com");
     delete u;

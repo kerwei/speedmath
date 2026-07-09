@@ -345,11 +345,16 @@ private:
             );
         )");
 
-        // Seed default test user (password: 000000)
+        // Seed default test users (password: 000000)
         string test_salt = "speedmath_seed";
         stringstream test_hash;
         test_hash << test_salt << "$" << hex << _fnv1a(test_salt + ":000000");
-        _exec("INSERT OR IGNORE INTO users (email, password_hash) VALUES ('test@speedmath.local', '" + test_hash.str() + "')");
+        string test_pw = test_hash.str();
+        _exec("INSERT OR IGNORE INTO users (email, password_hash) VALUES ('test@speedmath.local', '" + test_pw + "')");
+        _exec("INSERT OR IGNORE INTO users (email, password_hash) VALUES ('test1@speedmath.local', '" + test_pw + "')");
+        _exec("INSERT OR IGNORE INTO users (email, password_hash) VALUES ('test2@speedmath.local', '" + test_pw + "')");
+        _exec("INSERT OR IGNORE INTO users (email, password_hash) VALUES ('test3@speedmath.local', '" + test_pw + "')");
+        _exec("INSERT OR IGNORE INTO users (email, password_hash) VALUES ('test4@speedmath.local', '" + test_pw + "')");
 
         cerr << "[DB] Migration complete" << endl;
     }
