@@ -1,6 +1,6 @@
 # SpeedMath 🧮
 
-A C++20 mental arithmetic trainer with a web frontend. Supports all four basic operators with configurable difficulty, question count, and operator selection.
+A C++20 mental arithmetic trainer with a web frontend. Supports all four basic operators with configurable difficulty, question count, and operator selection. Now with AI opponents and multiplayer infrastructure.
 
 ## Project Structure
 
@@ -9,6 +9,7 @@ A C++20 mental arithmetic trainer with a web frontend. Supports all four basic o
 ├── main.cpp                    # 控制台入口 (kòngzhìtái rùkǒu — console entry point)
 ├── backend/
 │   ├── main.cpp                # HTTP 后端服务器 (hòuduān fúwùqì — backend server)
+│   ├── db.h                    # SQLite 数据库封装 (shùjùkù fēngzhuāng — DB wrapper)
 │   └── httplib.h               # HTTP 库 (single-header)
 ├── frontend/
 │   ├── index.html              # SPA 入口
@@ -16,21 +17,26 @@ A C++20 mental arithmetic trainer with a web frontend. Supports all four basic o
 │   └── src/
 │       ├── App.vue             # 根组件 (gēn zǔjiàn — root component)
 │       ├── style.css           # 全局样式 (quánjú yàngshì — global styles)
+│       ├── composables/
+│       │   └── useI18n.js      # 国际化 composable
+│       └── locales/
+│           ├── zh.json         # 中文语言包
+│           └── en.json         # 英文语言包
 │       └── components/
 │           ├── WelcomePage.vue  # 设置页面 (shèzhì — settings)
 │           ├── QuizPage.vue     # 答题页面 (dátí — quiz)
 │           └── ResultsPage.vue  # 结果页面 (jiéguǒ — results)
 ├── libspeedmath/
 │   ├── arithmetic.h / .cpp     # 运算符枚举、四则运算校验、随机数生成
+│   ├── ai_opponent.h / .cpp    # AI 对手 (AI opponent with difficulty levels)
 │   └── manager.h / .cpp        # 游戏管理：出题、计分、计时、持久化
+├── tests/
+│   ├── doctest.h               # 测试框架 (test framework)
+│   ├── test_arithmetic.cpp     # 算术测试
+│   ├── test_manager.cpp        # 管理器测试
+│   ├── test_ai.cpp             # AI 对手测试
+│   └── db_test.cpp             # 数据库测试
 └── build/                      # 构建输出 (gòujiàn shūchū — build output)
-```
-
-## Quick Start (Console)
-
-```bash
-xmake
-./build/linux/x86_64/release/speedmath
 ```
 
 ## Quick Start (Web — Full Stack)
@@ -42,6 +48,9 @@ xmake
 curl -o- https://raw.githubusercontent.com/nvm-sh/nvm/v0.40.4/install.sh | bash
 source ~/.bashrc
 nvm install --lts
+
+# Install SQLite development headers
+sudo apt install libsqlite3-dev
 
 # Download cpp-httplib header
 curl -o backend/httplib.h https://raw.githubusercontent.com/yhirose/cpp-httplib/master/httplib.h
@@ -71,19 +80,12 @@ cd ..
 
 The backend serves the built frontend from `frontend/dist/`. Open **http://localhost:8080**.
 
-## How to Play (Console)
-
-1. Choose difficulty (1 = 1-digit, 2 = 2-digit, etc.)
-2. Choose intensity (1 = 10 questions, 2 = 20 questions, etc.)
-3. Choose operators (e.g. `1234` for all four)
-4. Answer questions. For division, input `quotient remainder` (e.g. `7 / 3` → `2 1`)
-5. Results shown after all questions: time, score, average speed
-
 ## Build Requirements
 
 - xmake >= 3.0.0
 - C++20-compatible compiler (GCC >= 10 / Clang >= 10)
 - Node.js >= 18 (for frontend)
+- libsqlite3-dev (for database)
 
 ## Build Commands
 
@@ -91,6 +93,9 @@ The backend serves the built frontend from `frontend/dist/`. Open **http://local
 xmake                     # build all targets
 xmake build backend       # build only the backend
 xmake build speedmath     # build only the console version
+xmake build test_db       # build database unit test
+xmake run test_db         # run database unit test
+xmake run tests           # run all C++ unit tests
 xmake run                 # build and run console version
 xmake clean               # clean build artifacts
 xmake f -m debug          # switch to debug mode
@@ -98,20 +103,27 @@ xmake f -m debug          # switch to debug mode
 
 ## API Endpoints
 
-| Method | Path | Description |
-|---|---|---|
-| POST | `/api/game/new` | Create a new game session |
-| POST | `/api/game/question` | Get the next question |
-| POST | `/api/game/answer` | Submit an answer |
-| GET | `/api/game/results` | Get final results and clean up session |
+| Method | Path | Auth | Description |
+|---|---|---|---|
+| POST | `/api/auth/register` | No | Register new user (email + password) |
+| POST | `/api/auth/login` | No | Login, returns auth token |
+| POST | `/api/game/new` | No | Create a new game session |
+| POST | `/api/game/question` | No | Get the next question |
+| POST | `/api/game/answer` | No | Submit an answer |
+| GET | `/api/game/results` | No | Get final results and clean up session |
 
 ## Roadmap
 
 - [x] Four arithmetic operators (+ - * /)
 - [x] Web frontend (Vue 3 SPA)
 - [x] C++ HTTP backend (cpp-httplib)
-- [x] AI opponent mode
-- [ ] Multiplayer competition
+- [x] AI opponent mode with configurable difficulty
+- [x] Internationalization (中文 / English)
+- [x] SQLite database for user/room storage
+- [x] User registration and login (token-based auth)
+- [ ] Room system (create / join / ready)
+- [ ] Real-time multiplayer (WebSocket)
+- [ ] Multiplayer game loop
 - [ ] Android port
 
 ---

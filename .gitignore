@@ -13,6 +13,11 @@ speedmath
 correct.txt
 elapsed.txt
 
+# SQLite database (runtime data)
+speedmath.db
+speedmath.db-wal
+speedmath.db-shm
+
 # IDE / editor (user-specific)
 .vscode/
 .idea/
