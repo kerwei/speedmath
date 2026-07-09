@@ -35,10 +35,11 @@ static string generate_id() {
     return ss.str();
 }
 
-// ── Database singleton ──
-static Db db("speedmath.db");
+// ── Database singleton ── 数据库单例 (shùjùkù dānlì)
+static Db db("speedmath.db");  // 速算数据库 (sùsuàn shùjùkù — speedmath database)
 
-// ── Password & auth helpers ──
+// ── Password & auth helpers ── 密码哈希和令牌工具 (mìmǎ hāxī hé lìngpái gōngjù)
+// Generates a random alphanumeric salt string
 static string random_salt(size_t len = 16) {
     static const char chars[] = "abcdefghijklmnopqrstuvwxyz0123456789";
     string s;
@@ -47,25 +48,29 @@ static string random_salt(size_t len = 16) {
     return s;
 }
 
-// FNV-1a hash — fully deterministic across calls and platforms
+// FNV-1a 哈希 — 跨调用/跨平台结果一致 (kuà diàoyòng/kuà píngtái jiéguǒ yīzhì)
+// Deterministic hash: same input always gives the same result
 static size_t fnv1a(const string& s) {
     size_t h = 14695981039346656037ULL;
     for (char c : s) { h ^= static_cast<size_t>(c); h *= 1099511628211ULL; }
     return h;
 }
 
+// 加盐哈希密码 (jiā yán hāxī mìmǎ — salted password hash)
 static string hash_password(const string& pw, const string& salt) {
     stringstream ss;
     ss << salt << "$" << hex << fnv1a(salt + ":" + pw);
     return ss.str();
 }
 
+// 验证密码 (yànzhèng mìmǎ — verify password against stored hash)
 static bool verify_password(const string& pw, const string& stored) {
     size_t dollar = stored.find('$');
     if (dollar == string::npos) return false;
     return hash_password(pw, stored.substr(0, dollar)) == stored;
 }
 
+// 生成64字符令牌 (shēngchéng 64 zìfú lìngpái — generate 64-char auth token)
 static string generate_token() {
     static const char chars[] = "abcdefghijklmnopqrstuvwxyz0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ";
     string s;
@@ -73,6 +78,8 @@ static string generate_token() {
     return s;
 }
 
+// 认证中间件 (rènzhèng zhōngjiānjiàn — auth middleware)
+// Extracts user_id from Bearer token in Authorization header
 static int require_auth(const httplib::Request& req, httplib::Response& res) {
     string auth = req.get_header_value("Authorization", "");
     if (auth.substr(0, 7) != "Bearer ") {
@@ -87,6 +94,15 @@ static int require_auth(const httplib::Request& req, httplib::Response& res) {
         return -1;
     }
     return uid;
+}
+
+// ── 房间码生成器 (fángjiān mǎ shēngchéng qì — room code generator) ──
+// 4 chars, uppercase + digits, excludes confusable I/O/0/1
+static string make_room_code() {
+    static const char chars[] = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
+    string code;
+    for (int i = 0; i < 4; i++) code += chars[rand() % (sizeof(chars) - 1)];
+    return code;
 }
 
 // 辅助函数 (fǔzhù hánshù — helper): get param with fallback
@@ -187,6 +203,135 @@ int main() {
         delete u;
 
         res.set_content("{\"token\":\"" + token + "\"}", "application/json");
+    });
+
+    // ── Room endpoints ──
+
+    // POST /api/room/create — 创建房间 (chuàngjiàn fángjiān — create room)
+    svr.Post("/api/room/create", [](const httplib::Request& req, httplib::Response& res) {
+        int uid = require_auth(req, res);
+        if (uid < 0) return;
+
+        // Generate unique code
+        string code;
+        do { code = make_room_code(); } while (db.find_room_by_code(code));
+
+        int room_id = db.create_room(code, uid);
+        if (room_id < 0) {
+            res.status = 500;
+            res.set_content("{\"error\":\"create failed\"}", "application/json");
+            return;
+        }
+
+        db.add_room_player(room_id, uid);
+        log("POST", "/api/room/create", "code=" + code + " host=" + to_string(uid));
+        res.set_content("{\"room_id\":" + to_string(room_id) + ",\"code\":\"" + code + "\"}", "application/json");
+    });
+
+    // POST /api/room/join — 加入房间 (jiārù fángjiān — join room)
+    svr.Post("/api/room/join", [](const httplib::Request& req, httplib::Response& res) {
+        int uid = require_auth(req, res);
+        if (uid < 0) return;
+
+        string code = param_or(req, "code", "");
+        if (code.empty()) {
+            res.status = 400;
+            res.set_content("{\"error\":\"missing code\"}", "application/json");
+            return;
+        }
+
+        RoomRow* room = db.find_room_by_code(code);
+        if (!room) {
+            res.status = 404;
+            res.set_content("{\"error\":\"room not found\"}", "application/json");
+            return;
+        }
+
+        if (room->status != "waiting") {
+            res.status = 400;
+            res.set_content("{\"error\":\"room not joinable\"}", "application/json");
+            delete room;
+            return;
+        }
+
+        db.add_room_player(room->id, uid);
+        log("POST", "/api/room/join", "code=" + code + " user=" + to_string(uid));
+        res.set_content("{\"room_id\":" + to_string(room->id) + ",\"code\":\"" + code + "\"}", "application/json");
+        delete room;
+    });
+
+    // POST /api/room/leave — 离开房间 (líkāi fángjiān — leave room)
+    svr.Post("/api/room/leave", [](const httplib::Request& req, httplib::Response& res) {
+        int uid = require_auth(req, res);
+        if (uid < 0) return;
+
+        int room_id = stoi(param_or(req, "room_id", "-1"));
+        if (room_id < 0) { res.status = 400; res.set_content("{\"error\":\"invalid room\"}", "application/json"); return; }
+
+        db.remove_room_player(room_id, uid);
+        // If no players left, delete the room
+        auto remaining = db.get_room_players(room_id);
+        if (remaining.empty()) db.delete_room(room_id);
+
+        log("POST", "/api/room/leave", "room=" + to_string(room_id) + " user=" + to_string(uid));
+        res.set_content("{\"ok\":true}", "application/json");
+    });
+
+    // POST /api/room/ready — 准备/取消准备 (zhǔnbèi — toggle ready)
+    svr.Post("/api/room/ready", [](const httplib::Request& req, httplib::Response& res) {
+        int uid = require_auth(req, res);
+        if (uid < 0) return;
+
+        int room_id = stoi(param_or(req, "room_id", "-1"));
+        bool ready = param_or(req, "ready", "true") == "true";
+        if (room_id < 0) { res.status = 400; res.set_content("{\"error\":\"invalid room\"}", "application/json"); return; }
+
+        db.set_player_ready(room_id, uid, ready);
+        log("POST", "/api/room/ready", "room=" + to_string(room_id) + " user=" + to_string(uid) + " ready=" + (ready ? "1" : "0"));
+        res.set_content("{\"ok\":true}", "application/json");
+    });
+
+    // GET /api/room/status — 房间状态 (fángjiān zhuàngtài — room status)
+    svr.Get("/api/room/status", [](const httplib::Request& req, httplib::Response& res) {
+        int uid = require_auth(req, res);
+        if (uid < 0) return;
+
+        int room_id = stoi(param_or(req, "room_id", "-1"));
+        if (room_id < 0) { res.status = 400; res.set_content("{\"error\":\"invalid room\"}", "application/json"); return; }
+
+        RoomRow* room = nullptr;
+        for (int attempt = 0; attempt < 2; attempt++) {
+            room = db.find_room_by_id(room_id);
+            if (room) break;
+            // Maybe room_id is actually a code
+            room = db.find_room_by_code(to_string(room_id));
+            if (room) break;
+        }
+        if (!room) {
+            res.status = 404;
+            res.set_content("{\"error\":\"room not found\"}", "application/json");
+            return;
+        }
+
+        auto players = db.get_room_players(room->id);
+        string players_json = "[";
+        for (size_t i = 0; i < players.size(); i++) {
+            if (i > 0) players_json += ",";
+            players_json += "{\"user_id\":" + to_string(players[i].user_id);
+            players_json += ",\"username\":\"" + players[i].username + "\"";
+            players_json += ",\"ready\":" + string(players[i].ready ? "true" : "false") + "}";
+        }
+        players_json += "]";
+
+        res.set_content(
+            "{\"room_id\":" + to_string(room->id)
+            + ",\"code\":\"" + room->code + "\""
+            + ",\"status\":\"" + room->status + "\""
+            + ",\"host_id\":" + to_string(room->host_id)
+            + ",\"players\":" + players_json + "}",
+            "application/json"
+        );
+        delete room;
     });
 
     // POST /api/game/new — 创建新游戏 (chuàngjiàn xīn yóuxì — create new game)

@@ -180,6 +180,26 @@ public:
         return row;
     }
 
+    RoomRow* find_room_by_id(int id) {
+        sqlite3_stmt* stmt = _prepare(
+            "SELECT id, code, host_id, status, created_at FROM rooms WHERE id = ?"
+        );
+        if (!stmt) return nullptr;
+        sqlite3_bind_int(stmt, 1, id);
+        RoomRow* row = nullptr;
+        if (sqlite3_step(stmt) == SQLITE_ROW) {
+            row = new RoomRow{
+                sqlite3_column_int(stmt, 0),
+                reinterpret_cast<const char*>(sqlite3_column_text(stmt, 1)),
+                sqlite3_column_int(stmt, 2),
+                reinterpret_cast<const char*>(sqlite3_column_text(stmt, 3)),
+                reinterpret_cast<const char*>(sqlite3_column_text(stmt, 4))
+            };
+        }
+        sqlite3_finalize(stmt);
+        return row;
+    }
+
     bool update_room_status(int room_id, const string& status) {
         sqlite3_stmt* stmt = _prepare("UPDATE rooms SET status = ? WHERE id = ?");
         if (!stmt) return false;
