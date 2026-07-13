@@ -128,6 +128,7 @@ xmake f -m debug          # switch to debug mode
 - [x] SQLite database for user/room storage
 - [x] User registration and login (token-based auth)
 - [x] Room system (create / join / ready / leave / status)
+- [x] Frontend: login/register page and room lobby UI
 - [ ] Real-time multiplayer (WebSocket)
 - [ ] Multiplayer game loop
 - [ ] Android port
