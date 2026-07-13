@@ -1,9 +1,11 @@
 <script setup>
-import { ref, computed, onMounted, onUnmounted, nextTick } from 'vue'
+import { ref, computed, onMounted, onUnmounted, nextTick, watch } from 'vue'
 import { useI18n } from '../composables/useI18n.js'
+import { useGameWs } from '../composables/useGameWs.js'
 
 const { t } = useI18n()
-const props = defineProps({ config: Object })
+const ws = useGameWs()
+const props = defineProps({ config: Object, multiplayer: Boolean })
 const emit = defineEmits(['finish'])
 
 // Core state
@@ -313,6 +315,14 @@ function timeoutSubmit() {
 
 async function submitAnswer() {
   if (!answer.value.trim()) return
+
+  if (props.multiplayer) {
+    // 多人模式 — 通过 WebSocket 提交 (tōngguò WebSocket tíjiāo — submit via WS)
+    playerAnswered.value = true
+    ws.submitAnswer(answer.value.trim())
+    return
+  }
+
   playerAnswered.value = true
 
   // Clear timers
@@ -346,7 +356,43 @@ function startCountdown() {
   }, 1000)
 }
 
-onMounted(() => startCountdown())
+onMounted(() => {
+  if (props.multiplayer) {
+    // 多人模式 — 通过 WebSocket 接收题目 (jiēshōu tímù — receive questions via WS)
+    loading.value = true
+    // Wait for first question via WS
+    const unwatch = watch(() => ws.question.value, (q) => {
+      if (q && loading.value) {
+        loading.value = false
+        question.value = q
+        total.value = ws.total.value
+        questionsDone.value = ws.qNum.value - 1
+        phase.value = 'input'
+        unwatch()
+      }
+    })
+    // Also listen for game_over
+    watch(() => ws.gamePhase.value, (phase) => {
+      if (phase === 'finished') {
+        finished.value = true
+        emit('finish', { multiplayer: true, players: ws.results.value })
+      }
+    })
+    // Track questions
+    watch(() => ws.qNum.value, (n) => {
+      if (n > 0) {
+        questionsDone.value = n - 1
+        question.value = ws.question.value
+        total.value = ws.total.value
+        phase.value = 'input'
+        answer.value = ''
+        result.value = ''
+      }
+    })
+  } else {
+    startCountdown()
+  }
+})
 onUnmounted(() => {
   if (timerInterval) clearInterval(timerInterval)
   if (questionTimerInterval) clearInterval(questionTimerInterval)
@@ -418,8 +464,22 @@ onUnmounted(() => {
       <button class="btn btn-primary" @click="submitAnswer"
         :disabled="!answer.trim() || playerAnswered || phase !== 'input'">{{ t('quiz.submit') }}</button>
 
+      <!-- 多人模式玩家列表 (duōrén móshì wánjiā lièbiǎo — multiplayer player list) -->
+      <div v-if="props.multiplayer" class="mp-players">
+        <div v-for="p in ws.players.value" :key="p.user_id" class="ai-section"
+          :class="{ 'mp-highlight': ws.gamePhase.value === 'finished' }">
+          <div class="ai-result-row">
+            <span class="ai-answer">{{ p.username }}: <strong>{{ p.answered ? (p.correct + '/' + ws.total.value) : '...' }}</strong></span>
+            <span class="ai-verdict" v-if="p.answered && ws.gamePhase.value === 'evaluation'"
+              :class="'result-' + (p.correct > 0 ? 'correct' : 'wrong')">
+              ({{ p.time_ms > 0 ? (p.time_ms / 1000).toFixed(1) + 's' : '?' }})
+            </span>
+          </div>
+        </div>
+      </div>
+
       <!-- Human result card (always visible, same style as AI) -->
-      <div class="human-section">
+      <div v-if="!props.multiplayer" class="human-section">
         <!-- Evaluation: show answer + verdict -->
         <div v-if="phase === 'evaluation' && result" class="human-result-row">
           <span class="human-answer">😎 {{ t('human') }}: <strong>{{ answer || '—' }}</strong></span>
@@ -432,7 +492,7 @@ onUnmounted(() => {
       </div>
 
       <!-- AI result cards -->
-      <div class="ai-section-wrapper">
+      <div v-if="!props.multiplayer" class="ai-section-wrapper">
         <div v-for="i in aiCount" :key="'ai-state-'+i" class="ai-section">
           <!-- Evaluation: show answer + verdict -->
           <div v-if="aiRevealed[i-1]" class="ai-revealed">
@@ -467,6 +527,8 @@ onUnmounted(() => {
 .human-answer strong { font-family: 'Courier New', monospace; font-size: 1.1rem; }
 .human-verdict { font-size: 0.85rem; font-weight: 600; }
 .human-waiting { color: #ffd700; font-size: 0.85rem; animation: pulse 1.5s ease-in-out infinite; }
+.mp-players { margin-top: 0.5rem; }
+.mp-highlight { border-color: rgba(255,215,0,0.4) !important; }
 .ai-section { margin-top: 0.5rem; padding: 0.4rem 0.5rem; border-radius: 8px; background: rgba(72, 198, 239, 0.08); border: 1px solid rgba(72, 198, 239, 0.15); }
 .ai-thinking { color: #48c6ef; font-size: 0.85rem; animation: pulse 1.5s ease-in-out infinite; }
 @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.4; } }

@@ -17,6 +17,7 @@ const page = ref('welcome')
 const sessionId = ref('')
 const config = ref({})
 const multiplayer = ref(false)
+const mpResults = ref([])
 
 function onStart(cfg) {
   config.value = cfg
@@ -29,7 +30,7 @@ function onMultiplayer() {
 
 function onLobbyStart() {
   multiplayer.value = true
-  config.value = {}  // multiplayer config comes via WS
+  config.value = {}
   page.value = 'quiz'
 }
 
@@ -37,15 +38,21 @@ function onAuthDone() {
   page.value = 'lobby'
 }
 
-function onFinish(sid) {
-  sessionId.value = sid
+function onFinish(detail) {
+  if (detail && detail.multiplayer) {
+    mpResults.value = detail.players || []
+    page.value = 'results'
+  } else {
+    sessionId.value = detail
+    page.value = 'results'
+  }
   multiplayer.value = false
-  page.value = 'results'
 }
 
 function onRestart() {
   sessionId.value = ''
   config.value = {}
+  mpResults.value = []
   multiplayer.value = false
   page.value = 'welcome'
 }
@@ -81,6 +88,7 @@ function toggleLang() {
     <ResultsPage
       v-else-if="page === 'results'"
       :session-id="sessionId"
+      :mp-players="mpResults"
       @restart="onRestart"
     />
   </div>

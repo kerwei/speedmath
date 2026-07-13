@@ -96,6 +96,16 @@ public:
         return true;  // All have answered
     }
 
+    // 超时处理 (chāoshí chǔlǐ — mark unanswered players as timed out)
+    void timeout_unanswered() {
+        for (auto& p : _players) {
+            if (!p.answered) {
+                p.answered = true;
+                p.answer = "";
+            }
+        }
+    }
+
     // Grade all answers and return leaderboard JSON
     string grade_and_leaderboard_json() {
         auto& q = _questions[_current_q];

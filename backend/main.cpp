@@ -518,14 +518,21 @@ int main() {
                             lock_guard<mutex> lock(wsr->mtx);
                             ws_broadcast(wsr, qjson);
                         }
-                        // Wait for all players to answer (poll every 100ms)
+                        // Wait for all players to answer (poll every 100ms, timeout 15s)
                         int total = gs->players().size();
-                        int answered = 0;
+                        int answered = 0, wait_loops = 0;
+                        const int MAX_WAIT = 150;  // 150 * 100ms = 15 seconds
                         do {
                             this_thread::sleep_for(100ms);
                             answered = 0;
                             for (auto& p : gs->players()) {
                                 if (p.answered) answered++;
+                            }
+                            wait_loops++;
+                            // Timeout: mark remaining players as answered (no answer → wrong)
+                            if (wait_loops >= MAX_WAIT && answered < total) {
+                                gs->timeout_unanswered();
+                                break;
                             }
                         } while (answered < total);
 
