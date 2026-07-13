@@ -4,6 +4,7 @@
 #include "httplib.h"
 #include "../libspeedmath/manager.h"
 #include "db.h"
+#include "game_session.h"
 #include <signal.h>
 #include <thread>
 #include <unordered_map>
@@ -11,6 +12,9 @@
 #include <iostream>
 #include <ctime>
 #include <functional>
+#include <memory>
+#include <shared_mutex>
+#include <atomic>
 
 using namespace std;
 
@@ -105,6 +109,63 @@ static string make_room_code() {
     return code;
 }
 
+// ── WebSocket 房间状态 (fángjiān zhuàngtài — in-memory room state) ──
+// These hold the live WebSocket connections for each room.
+struct WsPlayer {
+    int user_id;
+    string username;
+    httplib::ws::WebSocket* ws;  // non-owning pointer
+    bool ready = false;
+};
+
+struct WsRoom {
+    int room_id;
+    string code;
+    int host_id;
+    string status = "waiting";
+    vector<shared_ptr<WsPlayer>> players;
+    mutex mtx;
+};
+
+static unordered_map<int, shared_ptr<WsRoom>> ws_rooms;
+static mutex g_ws_mtx;
+
+// 游戏会话 (yóuxì huìhuà — live game sessions per room)
+static unordered_map<int, shared_ptr<GameSession>> game_sessions;
+
+// Broadcast a JSON message to all players in a WsRoom (caller must hold r->mtx)
+static void ws_broadcast(shared_ptr<WsRoom>& r, const string& json) {
+    for (auto& p : r->players) {
+        if (p->ws && p->ws->is_open()) p->ws->send(json);
+    }
+}
+
+// Build a JSON string describing the room state (players + ready states)
+static string ws_room_json(shared_ptr<WsRoom>& r) {
+    string j = "{\"type\":\"room_state\",\"room_id\":" + to_string(r->room_id);
+    j += ",\"code\":\"" + r->code + "\",\"status\":\"" + r->status + "\"";
+    j += ",\"host_id\":" + to_string(r->host_id) + ",\"players\":[";
+    for (size_t i = 0; i < r->players.size(); i++) {
+        if (i > 0) j += ",";
+        auto& p = r->players[i];
+        j += "{\"user_id\":" + to_string(p->user_id);
+        j += ",\"username\":\"" + p->username + "\"";
+        j += ",\"ready\":" + string(p->ready ? "true" : "false") + "}";
+    }
+    j += "]}";
+    return j;
+}
+
+// Find which room a user is in (searches all rooms — call with g_ws_mtx held)
+static shared_ptr<WsRoom> find_room_by_user(int uid) {
+    for (auto& [id, r] : ws_rooms) {
+        for (auto& p : r->players) {
+            if (p->user_id == uid) return r;
+        }
+    }
+    return nullptr;
+}
+
 // 辅助函数 (fǔzhù hánshù — helper): get param with fallback
 static string param_or(const httplib::Request& req, const string& name, const string& fallback) {
     if (req.has_param(name)) {
@@ -137,8 +198,10 @@ int main() {
     svr.set_default_headers({
         {"Access-Control-Allow-Origin", "*"},
         {"Access-Control-Allow-Methods", "GET, POST, OPTIONS"},
-        {"Access-Control-Allow-Headers", "Content-Type"}
+        {"Access-Control-Allow-Headers", "Content-Type, Authorization"}
     });
+
+    svr.set_websocket_ping_interval(10);  // 10s ping for WebSocket keepalive
 
     svr.Options(".*", [](const httplib::Request& req, httplib::Response& res) {
         res.status = 204;
@@ -227,6 +290,15 @@ int main() {
         }
 
         db.add_room_player(room_id, uid);
+        // Create in-memory WsRoom for WebSocket state
+        {
+            lock_guard<mutex> lock(g_ws_mtx);
+            auto room = make_shared<WsRoom>();
+            room->room_id = room_id;
+            room->code = code;
+            room->host_id = uid;
+            ws_rooms[room_id] = room;
+        }
         log("POST", "/api/room/create", "code=" + code + " host=" + to_string(uid));
         res.set_content("{\"room_id\":" + to_string(room_id) + ",\"code\":\"" + code + "\"}", "application/json");
     });
@@ -335,6 +407,181 @@ int main() {
             "application/json"
         );
         delete room;
+    });
+
+    // ── WebSocket 端点 (WebSocket duān diǎn — real-time room communication) ──
+    svr.WebSocket("/api/ws", [](const httplib::Request& req, httplib::ws::WebSocket& ws) {
+        string token = req.get_param_value("token");
+        int uid = db.find_user_by_token(token);
+        if (uid < 0) { ws.close(); return; }
+
+        string rid_str = req.get_param_value("room_id");
+        int room_id = rid_str.empty() ? -1 : stoi(rid_str);
+        if (room_id < 0) { ws.close(); return; }
+
+        // Verify user is in this room via DB
+        auto db_players = db.get_room_players(room_id);
+        bool authorized = false;
+        string username;
+        for (auto& p : db_players) {
+            if (p.user_id == uid) { authorized = true; username = p.username; break; }
+        }
+        if (!authorized) { ws.close(); return; }
+
+        // Get or create WsRoom
+        shared_ptr<WsRoom> wsr;
+        {
+            lock_guard<mutex> lock(g_ws_mtx);
+            auto it = ws_rooms.find(room_id);
+            if (it == ws_rooms.end()) { ws.close(); return; }
+            wsr = it->second;
+        }
+
+        // Add player to room
+        shared_ptr<WsPlayer> my_player;
+        {
+            lock_guard<mutex> lock(wsr->mtx);
+            // Reuse if reconnecting
+            for (auto& p : wsr->players) {
+                if (p->user_id == uid) { my_player = p; break; }
+            }
+            if (!my_player) {
+                my_player = make_shared<WsPlayer>();
+                my_player->user_id = uid;
+                my_player->username = username;
+                wsr->players.push_back(my_player);
+            }
+            my_player->ws = &ws;
+            ws_broadcast(wsr, ws_room_json(wsr));
+        }
+
+        // Read loop
+        string msg;
+        while (ws.read(msg) != httplib::ws::ReadResult::Fail) {
+            if (msg.find("\"type\":\"ready\"") != string::npos) {
+                lock_guard<mutex> lock(wsr->mtx);
+                my_player->ready = (msg.find("\"ready\":true") != string::npos);
+                ws_broadcast(wsr, ws_room_json(wsr));
+            } else if (msg.find("\"type\":\"leave\"") != string::npos) {
+                break;
+            } else if (msg.find("\"type\":\"start\"") != string::npos) {
+                if (uid != wsr->host_id) continue;
+
+                // Parse game config from JSON
+                int diff = 1, intense = 1;
+                string ops_str = "1234";
+                auto get_val = [&](const string& key) -> string {
+                    auto p = msg.find("\"" + key + "\":");
+                    if (p == string::npos) return "";
+                    p = msg.find(':', p) + 1;
+                    while (p < msg.size() && (msg[p] == ' ' || msg[p] == '"')) p++;
+                    string v;
+                    while (p < msg.size() && msg[p] != '"' && msg[p] != ',' && msg[p] != '}') v += msg[p++];
+                    return v;
+                };
+                string ds = get_val("diff");
+                if (!ds.empty()) diff = stoi(ds);
+                string is = get_val("intense");
+                if (!is.empty()) intense = stoi(is);
+                string os = get_val("ops");
+                if (!os.empty()) ops_str = os;
+
+                vector<Op> ops;
+                for (char c : ops_str) {
+                    switch (c) {
+                        case '1': ops.push_back(Op::ADD); break;
+                        case '2': ops.push_back(Op::SUB); break;
+                        case '3': ops.push_back(Op::MUL); break;
+                        case '4': ops.push_back(Op::DIV); break;
+                    }
+                }
+                if (ops.empty()) ops.push_back(Op::ADD);
+
+                // Create game session
+                auto gs = make_shared<GameSession>(room_id, diff, intense, ops);
+                {
+                    lock_guard<mutex> lock(wsr->mtx);
+                    for (auto& p : wsr->players) {
+                        gs->add_player(p->user_id, p->username);
+                    }
+                    game_sessions[room_id] = gs;
+                    wsr->status = "playing";
+                    ws_broadcast(wsr, "{\"type\":\"game_start\"}");
+                }
+
+                // Game loop in a separate thread
+                 thread([wsr, gs, room_id]() mutable {
+                    string qjson;
+                    while ((qjson = gs->next_question_json()) != "") {
+                        // Broadcast question
+                        {
+                            lock_guard<mutex> lock(wsr->mtx);
+                            ws_broadcast(wsr, qjson);
+                        }
+                        // Wait for all players to answer (poll every 100ms)
+                        int total = gs->players().size();
+                        int answered = 0;
+                        do {
+                            this_thread::sleep_for(100ms);
+                            answered = 0;
+                            for (auto& p : gs->players()) {
+                                if (p.answered) answered++;
+                            }
+                        } while (answered < total);
+
+                        // All answered — grade and broadcast leaderboard
+                        string lb = gs->grade_and_leaderboard_json();
+                        {
+                            lock_guard<mutex> lock(wsr->mtx);
+                            // Include each player's answer in the broadcast
+                            string full_lb = lb.substr(0, lb.size() - 1); // remove trailing }
+                            full_lb += ",\"answers\":[";
+                            for (size_t i = 0; i < gs->players().size(); i++) {
+                                if (i > 0) full_lb += ",";
+                                full_lb += "{\"user_id\":" + to_string(gs->players()[i].user_id);
+                                full_lb += ",\"answer\":\"" + gs->players()[i].answer + "\"}";
+                            }
+                            full_lb += "]}";
+                            ws_broadcast(wsr, full_lb);
+                        }
+
+                        // Pause between questions
+                        this_thread::sleep_for(2s);
+                    }
+
+                    // Game over
+                    {
+                        lock_guard<mutex> lock(wsr->mtx);
+                        ws_broadcast(wsr, gs->results_json());
+                        wsr->status = "finished";
+                    }
+                }).detach();
+
+            } else if (msg.find("\"type\":\"answer\"") != string::npos) {
+                // Parse answer from JSON
+                auto ap = msg.find("\"answer\":\"");
+                if (ap != string::npos) {
+                    ap += 10; // skip past "answer":"
+                    string ans;
+                    while (ap < msg.size() && msg[ap] != '"') ans += msg[ap++];
+                    auto gs_it = game_sessions.find(room_id);
+                    if (gs_it != game_sessions.end()) {
+                        gs_it->second->submit_answer(uid, ans);
+                    }
+                }
+            }
+        }
+
+        // Disconnect — remove player from room
+        {
+            lock_guard<mutex> lock(wsr->mtx);
+            for (auto it = wsr->players.begin(); it != wsr->players.end(); ++it) {
+                if ((*it)->user_id == uid) { wsr->players.erase(it); break; }
+            }
+            if (!wsr->players.empty()) {
+                ws_broadcast(wsr, ws_room_json(wsr));
+            }
+        }
     });
 
     // POST /api/game/new — 创建新游戏 (chuàngjiàn xīn yóuxì — create new game)
