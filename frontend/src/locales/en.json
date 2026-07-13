@@ -90,6 +90,7 @@
   "lobby.error.nocode": "Enter a room code",
   "lobby.error.notfound": "Room not found",
   "lobby.error.notjoinable": "Room is no longer joinable",
+  "lobby.start": "Start Game",
 
   "settings.multiplayer": "Multiplayer",
 

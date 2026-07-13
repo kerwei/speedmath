@@ -129,8 +129,9 @@ xmake f -m debug          # switch to debug mode
 - [x] User registration and login (token-based auth)
 - [x] Room system (create / join / ready / leave / status)
 - [x] Frontend: login/register page and room lobby UI
-- [ ] Real-time multiplayer (WebSocket)
-- [ ] Multiplayer game loop
+- [x] Real-time multiplayer (WebSocket gameplay + leaderboard sync)
+- [x] Multiplayer game loop (host starts, timed answers, auto-advance)
+- [x] Disconnect handling (player drop detection, answer timeout)
 - [ ] Android port
 
 ---

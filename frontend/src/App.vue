@@ -7,13 +7,17 @@ import QuizPage from './components/QuizPage.vue'
 import ResultsPage from './components/ResultsPage.vue'
 import { useI18n } from './composables/useI18n.js'
 import { useAuth } from './composables/useAuth.js'
+import { useGameWs } from './composables/useGameWs.js'
 
 const { t, setLocale, locale } = useI18n()
 const { isLoggedIn } = useAuth()
+const { gamePhase } = useGameWs()
 
 const page = ref('welcome')
 const sessionId = ref('')
 const config = ref({})
+const multiplayer = ref(false)
+const mpResults = ref([])
 
 function onStart(cfg) {
   config.value = cfg
@@ -24,22 +28,37 @@ function onMultiplayer() {
   page.value = isLoggedIn() ? 'lobby' : 'auth'
 }
 
+function onLobbyStart() {
+  multiplayer.value = true
+  config.value = {}
+  page.value = 'quiz'
+}
+
 function onAuthDone() {
   page.value = 'lobby'
 }
 
-function onFinish(sid) {
-  sessionId.value = sid
-  page.value = 'results'
+function onFinish(detail) {
+  if (detail && detail.multiplayer) {
+    mpResults.value = detail.players || []
+    page.value = 'results'
+  } else {
+    sessionId.value = detail
+    page.value = 'results'
+  }
+  multiplayer.value = false
 }
 
 function onRestart() {
   sessionId.value = ''
   config.value = {}
+  mpResults.value = []
+  multiplayer.value = false
   page.value = 'welcome'
 }
 
 function onBackFromLobby() {
+  multiplayer.value = false
   page.value = 'welcome'
 }
 
@@ -59,15 +78,17 @@ function toggleLang() {
     </div>
     <WelcomePage v-if="page === 'welcome'" @start="onStart" @multiplayer="onMultiplayer" />
     <AuthPage v-else-if="page === 'auth'" @done="onAuthDone" />
-    <LobbyPage v-else-if="page === 'lobby'" @back="onBackFromLobby" />
+    <LobbyPage v-else-if="page === 'lobby'" @start="onLobbyStart" @back="onBackFromLobby" />
     <QuizPage
       v-else-if="page === 'quiz'"
       :config="config"
+      :multiplayer="multiplayer"
       @finish="onFinish"
     />
     <ResultsPage
       v-else-if="page === 'results'"
       :session-id="sessionId"
+      :mp-players="mpResults"
       @restart="onRestart"
     />
   </div>

@@ -3,7 +3,7 @@ import { ref, onMounted } from 'vue'
 import { useI18n } from '../composables/useI18n.js'
 
 const { t } = useI18n()
-const props = defineProps({ sessionId: String })
+const props = defineProps({ sessionId: String, mpPlayers: { type: Array, default: () => [] } })
 const emit = defineEmits(['restart'])
 
 const players = ref([])
@@ -18,6 +18,13 @@ function typeLabel(p) {
 }
 
 onMounted(async () => {
+  // If WS multiplayer results are provided directly, use them
+  if (props.mpPlayers && props.mpPlayers.length > 0) {
+    players.value = [...props.mpPlayers].sort((a, b) => a.time_ms - b.time_ms)
+    loading.value = false
+    return
+  }
+  // Otherwise fetch from REST API
   const params = new URLSearchParams({ session_id: props.sessionId })
   const res = await fetch(`/api/game/results?${params}`)
   const data = await res.json()

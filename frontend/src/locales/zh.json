@@ -90,6 +90,7 @@
   "lobby.error.nocode": "请输入房间码",
   "lobby.error.notfound": "房间不存在",
   "lobby.error.notjoinable": "房间已无法加入",
+  "lobby.start": "开始游戏",
 
   "settings.multiplayer": "多人游戏",
 

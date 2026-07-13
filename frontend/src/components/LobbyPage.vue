@@ -1,10 +1,12 @@
 <script setup>
-import { ref, onUnmounted } from 'vue'
+import { ref, watch, onUnmounted } from 'vue'
 import { useI18n } from '../composables/useI18n.js'
 import { useAuth } from '../composables/useAuth.js'
+import { useGameWs } from '../composables/useGameWs.js'
 
 const { t } = useI18n()
 const { token, userId, logout } = useAuth()
+const { gamePhase, connect: wsConnect, disconnect: wsDisconnect, startGame } = useGameWs()
 const emit = defineEmits(['start', 'back'])
 
 const activeTab = ref('create')  // 'create' | 'join'
@@ -37,6 +39,7 @@ async function createRoom() {
   roomId.value = data.room_id
   roomCode.value = data.code
   roomStatus.value = 'waiting'
+  wsConnect(data.room_id)
   startPolling()
 }
 
@@ -54,12 +57,14 @@ async function joinRoom() {
   roomId.value = data.room_id
   roomCode.value = data.code
   roomStatus.value = 'waiting'
+  wsConnect(data.room_id)
   startPolling()
 }
 
 async function leaveRoom() {
   await apiPost('/api/room/leave', { room_id: roomId.value })
   stopPolling()
+  wsDisconnect()
   roomId.value = 0; roomCode.value = ''; roomStatus.value = null; players.value = []
 }
 
@@ -95,18 +100,28 @@ function stopPolling() {
   if (pollTimer) { clearInterval(pollTimer); pollTimer = null }
 }
 
-onUnmounted(() => stopPolling())
+onUnmounted(() => { stopPolling(); })
+
+// 游戏开始 — 跳转到答题页面 (tiào zhuǎn dào dátí yèmiàn — navigate to quiz page)
+watch(gamePhase, (phase) => {
+  if (phase === 'playing') {
+    stopPolling()
+    emit('start')
+  }
+})
 
 // Expose for cleanup
 function handleBack() {
   if (roomId.value) leaveRoom()
   stopPolling()
+  wsDisconnect()
   emit('back')
 }
 
 function handleLogout() {
   if (roomId.value) leaveRoom()
   stopPolling()
+  wsDisconnect()
   logout()
   emit('back')
 }
@@ -177,6 +192,10 @@ function handleLogout() {
       <div class="lobby-actions">
         <button class="btn btn-primary" @click="toggleReady" style="flex:1">
           {{ players.find(p => p.me)?.ready ? t('lobby.unready') : t('lobby.ready') }}
+        </button>
+        <button v-if="players.find(p => p.me)?.isHost" class="btn btn-primary" @click="startGame(1,1,'1234')"
+          style="flex:1;background:#4caf50" :disabled="!players.every(p => p.ready)">
+          {{ t('lobby.start') }}
         </button>
         <button class="btn btn-sm" @click="leaveRoom">{{ t('lobby.leave') }}</button>
       </div>
