@@ -102,6 +102,58 @@ xmake clean               # clean build artifacts
 xmake f -m debug          # switch to debug mode
 ```
 
+## Deployment (Aliyun ECS)
+
+### One-time ECS setup
+
+```bash
+# On your ECS instance as root / sudo user
+bash deploy/setup-ecs.sh
+```
+
+This installs dependencies, creates the speedmath user, installs the systemd service, and preps `/opt/speedmath`.
+
+### CI/CD (GitHub Actions)
+
+The workflow in `.github/workflows/deploy.yml` builds and deploys automatically on every push to `main`:
+
+1. Builds C++ backend (xmake) + Vue frontend (npm)
+2. Packages the binary and systemd service into a tarball
+3. SCPs to ECS and restarts the service
+
+**Required GitHub secrets:**
+
+| Secret | Value |
+|---|---|
+| `ECS_SSH_HOST` | `speedmath@<your-ecs-ip>` |
+| `ECS_SSH_KEY` | Private SSH key (ed25519) for the ECS instance |
+
+### Manual deploy (from local machine)
+
+```bash
+# Build locally
+xmake build backend && cd frontend && npm run build && cd ..
+
+# Deploy
+bash deploy/deploy.sh speedmath@<your-ecs-ip>
+```
+
+### Architecture
+
+```
+                         Aliyun ECS (1C1G)
+        ┌──────────────────────────────────────┐
+        │  systemd → speedmath (port 8080)      │
+        │    ├─ REST API  (/api/*)              │
+        │    ├─ WebSocket (/api/ws)             │
+        │    └─ Static files (/) ← frontend/dist │
+        │  /opt/speedmath/                      │
+        │    ├─ backend           (binary)      │
+        │    ├─ speedmath.db      (SQLite)      │
+        │    └─ backups/         (DB snapshots) │
+        └──────────────────────────────────────┘
+```
+
 ## API Endpoints
 
 | Method | Path | Auth | Description |
@@ -132,6 +184,7 @@ xmake f -m debug          # switch to debug mode
 - [x] Real-time multiplayer (WebSocket gameplay + leaderboard sync)
 - [x] Multiplayer game loop (host starts, timed answers, auto-advance)
 - [x] Disconnect handling (player drop detection, answer timeout)
+- [x] CI/CD pipeline (GitHub Actions → Aliyun ECS)
 - [ ] Android port
 
 ---

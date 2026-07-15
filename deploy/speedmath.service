@@ -1,0 +1,16 @@
+[Unit]
+Description=SpeedMath Backend Server
+After=network.target
+
+[Service]
+Type=simple
+User=speedmath
+Group=speedmath
+WorkingDirectory=/opt/speedmath
+ExecStart=/opt/speedmath/backend
+Restart=always
+RestartSec=3
+Environment=PORT=8080
+
+[Install]
+WantedBy=multi-user.target
