@@ -123,12 +123,12 @@ The workflow in `.github/workflows/deploy.yml` builds and deploys automatically 
 2. Packages the binary and systemd service into a tarball
 3. SCPs to ECS and restarts the service
 
-**Required GitHub secrets:**
+**Required GitHub secrets (on the PROD environment):**
 
 | Secret | Value |
 |---|---|
-| `ECS_SSH_HOST` | `speedmath@<your-ecs-ip>` |
-| `ECS_SSH_KEY` | Private SSH key (ed25519) for the ECS instance |
+| `ECS_SSH_HOST` | Your ECS IP address (e.g. `123.456.789.0`) |
+| `ECS_SSH_KEY` | Private SSH key for root access to the ECS instance |
 
 ### Manual deploy (from local machine)
 
