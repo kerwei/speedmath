@@ -80,16 +80,6 @@ jobs:
       - name: Make deploy script executable
         run: chmod +x deploy/deploy.sh
 
-      - name: Debug SSH key format
-        env:
-          SSH_KEY: ${{ secrets.ECS_SSH_KEY }}
-        run: |
-          echo "$SSH_KEY" > /tmp/test_key
-          chmod 600 /tmp/test_key
-          echo "Key starts with: $(head -1 /tmp/test_key)"
-          ssh-keygen -l -f /tmp/test_key 2>&1 || echo "KEY_FORMAT_UNSUPPORTED"
-          rm -f /tmp/test_key
-
       - name: Deploy to ECS
         env:
           SSH_HOST: ${{ secrets.ECS_SSH_HOST }}
