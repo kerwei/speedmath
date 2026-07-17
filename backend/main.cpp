@@ -768,7 +768,7 @@ int main() {
     });
 
     // 静态文件服务 (jìngtài wénjiàn fúwù — serve static frontend files)
-    svr.set_mount_point("/", "../frontend/dist");
+    svr.set_mount_point("/", "frontend/dist");
 
     // Block signals in the main thread — they'll be handled by sigwait thread
     sigset_t sigs;
