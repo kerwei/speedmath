@@ -103,7 +103,7 @@ jobs:
       uses: actions/download-artifact@v4
       with:
         name: speedmath-build
-        path: ./build-artifacts
+        path: .
 
     - name: Copy deployment files to server
       uses: appleboy/scp-action@v0.1.3
@@ -111,7 +111,7 @@ jobs:
         host: ${{ secrets.ECS_SSH_HOST }}
         username: root
         key: ${{ secrets.ECS_SSH_KEY }}
-        source: "build-artifacts/speedmath-deploy.tar.gz"
+        source: "speedmath-deploy.tar.gz"
         target: "/opt/speedmath/"
 
     - name: Deploy via SSH
