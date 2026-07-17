@@ -15,6 +15,7 @@
 #include <memory>
 #include <shared_mutex>
 #include <atomic>
+#include <random>
 
 using namespace std;
 
@@ -77,8 +78,9 @@ static bool verify_password(const string& pw, const string& stored) {
 // 生成64字符令牌 (shēngchéng 64 zìfú lìngpái — generate 64-char auth token)
 static string generate_token() {
     static const char chars[] = "abcdefghijklmnopqrstuvwxyz0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ";
+    static random_device rd;
     string s;
-    for (int i = 0; i < 64; i++) s += chars[rand() % (sizeof(chars) - 1)];
+    for (int i = 0; i < 64; i++) s += chars[rd() % (sizeof(chars) - 1)];
     return s;
 }
 

@@ -109,7 +109,7 @@ public:
 
     bool save_token(const string& token, int user_id) {
         sqlite3_stmt* stmt = _prepare(
-            "INSERT INTO tokens (token, user_id) VALUES (?, ?)"
+            "INSERT OR REPLACE INTO tokens (token, user_id) VALUES (?, ?)"
         );
         if (!stmt) return false;
         sqlite3_bind_text(stmt, 1, token.c_str(), -1, SQLITE_TRANSIENT);
