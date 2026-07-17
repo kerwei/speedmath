@@ -104,6 +104,8 @@ xmake f -m debug          # switch to debug mode
 
 ## Deployment (Aliyun ECS)
 
+**Image:** `aliyun_4_x64_20G_pro_alibase_20260512` (Alibaba Cloud Linux 4, package manager: `dnf`)
+
 ### One-time ECS setup
 
 ```bash
@@ -111,7 +113,7 @@ xmake f -m debug          # switch to debug mode
 bash deploy/setup-ecs.sh
 ```
 
-This installs dependencies, creates the speedmath user, installs the systemd service, and preps `/opt/speedmath`.
+This installs `sqlite-devel`, creates the speedmath user, installs the systemd service, opens port 8080 via firewalld, and preps `/opt/speedmath`.
 
 ### CI/CD (GitHub Actions)
 
