@@ -124,24 +124,41 @@ jobs:
           set -e
           cd /opt/speedmath
 
+          # ── Step 1: check if service is running ──
+          if systemctl is-active --quiet speedmath 2>/dev/null; then
+            SERVICE_WAS_RUNNING=true
+            echo "Service is running"
+          else
+            SERVICE_WAS_RUNNING=false
+            echo "Service is not running"
+          fi
+
+          # ── Step 2: shut down service ──
+          systemctl stop speedmath 2>/dev/null || true
+          echo "Service stopped"
+
+          # ── Step 3: deploy ──
           # Backup DB (keep last 3)
           if [ -f speedmath.db ]; then
             mkdir -p backups
             cp speedmath.db "backups/speedmath-$(date +%Y%m%d-%H%M%S).db"
             ls -t backups/speedmath-*.db | tail -n +4 | xargs rm -f 2>/dev/null || true
           fi
-
           # Extract new binary
           tar xzf speedmath-deploy.tar.gz
           chmod +x build/linux/x86_64/release/backend
+
+          # ── Step 4: cleanup ──
           cp build/linux/x86_64/release/backend backend
           chown speedmath:speedmath backend
           rm -rf build speedmath-deploy.tar.gz
+          echo "Deploy artifacts cleaned up"
 
-          # Restart service
+          # ── Step 5: bring service back online ──
           systemctl daemon-reload
           systemctl enable speedmath
           systemctl restart speedmath
+          echo "Service restarted"
 
     - name: Verify deployment
       uses: appleboy/ssh-action@v0.1.8
