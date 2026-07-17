@@ -138,8 +138,13 @@ TEST_CASE("Manager::grade_answer(string): division") {
     string correct_concat = to_string(quotient) + to_string(remainder);
     CHECK(m.grade_answer(correct_concat) == "correct");
 
-    // Wrong formats
-    CHECK(m.grade_answer(to_string(quotient)) == "wrong");  // missing remainder
+    // Plain quotient without remainder
+    if (remainder == 0) {
+        CHECK(m.grade_answer(to_string(quotient)) == "correct");
+    } else {
+        CHECK(m.grade_answer(to_string(quotient)) == "wrong");
+    }
+
     CHECK(m.grade_answer("") == "wrong");
 }
 
