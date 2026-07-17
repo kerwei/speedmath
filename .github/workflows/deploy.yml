@@ -1,0 +1,91 @@
+# 部署流水线 (bùshǔ liúshuǐxiàn — deploy to Aliyun ECS)
+name: Deploy
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: 'Build only, skip deploy'
+        required: false
+        default: 'false'
+
+env:
+  XMAKE_VERSION: '3.0.0'
+  NODE_VERSION: '20'
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install xmake
+        uses: xmake-io/github-action-setup-xmake@v1
+        with:
+          xmake-version: ${{ env.XMAKE_VERSION }}
+
+      - name: Cache xmake build
+        uses: actions/cache@v4
+        with:
+          path: |
+            .xmake
+            build
+          key: ${{ runner.os }}-xmake-${{ hashFiles('xmake.lua', 'libspeedmath/*.cpp', 'libspeedmath/*.h', 'backend/*.cpp') }}
+
+      - name: Install dependencies
+        run: sudo apt-get update && sudo apt-get install -y libsqlite3-dev
+
+      - name: Build backend
+        run: xmake build backend
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'npm'
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Build frontend
+        run: |
+          cd frontend
+          npm ci
+          npm run build
+
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: speedmath-build
+          path: |
+            build/linux/x86_64/release/backend
+            frontend/dist/
+            deploy/
+
+  deploy:
+    needs: build
+    if: github.event_name == 'push' || (github.event_name == 'workflow_dispatch' && github.event.inputs.dry_run != 'true')
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Download artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: speedmath-build
+          path: .
+
+      - name: Make deploy script executable
+        run: chmod +x deploy/deploy.sh
+
+      - name: Deploy to ECS
+        env:
+          SSH_HOST: ${{ secrets.ECS_SSH_HOST }}
+          SSH_KEY: ${{ secrets.ECS_SSH_KEY }}
+        run: |
+          mkdir -p ~/.ssh
+          echo "$SSH_KEY" > ~/.ssh/id_ed25519
+          chmod 600 ~/.ssh/id_ed25519
+          ssh-keyscan -H "${SSH_HOST##*@}" >> ~/.ssh/known_hosts 2>/dev/null
+          bash deploy/deploy.sh "$SSH_HOST"
