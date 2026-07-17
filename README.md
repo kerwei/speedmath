@@ -109,11 +109,13 @@ xmake f -m debug          # switch to debug mode
 ### One-time ECS setup
 
 ```bash
-# On your ECS instance as root / sudo user
+# On your ECS instance as root
 bash deploy/setup-ecs.sh
 ```
 
-This installs `sqlite-devel`, creates the speedmath user, installs the systemd service, opens port 8080 via firewalld, and preps `/opt/speedmath`.
+This installs `sqlite-devel`, creates the speedmath user, installs the systemd service, and preps `/opt/speedmath`.
+
+> **ECS Security Group:** After setup, go to the Aliyun web console → **ECS → Security Groups** → add an inbound rule allowing **TCP 8080** from `0.0.0.0/0`. Instance-level firewalls (firewalld/iptables) are not used on Alibaba Cloud.
 
 ### CI/CD (GitHub Actions)
 
