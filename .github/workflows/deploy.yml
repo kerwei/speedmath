@@ -78,9 +78,11 @@ jobs:
 
     - name: Package artifacts
       run: |
+        mkdir -p frontend/dist
         tar czf /tmp/speedmath-deploy.tar.gz \
           build/linux/x86_64/release/backend \
-          deploy/speedmath.service
+          deploy/speedmath.service \
+          frontend/dist
 
     - name: Upload artifacts
       uses: actions/upload-artifact@v4
@@ -150,8 +152,8 @@ jobs:
 
           # ── Step 4: cleanup ──
           cp build/linux/x86_64/release/backend backend
-          chown speedmath:speedmath backend
           rm -rf build speedmath-deploy.tar.gz
+          chown -R speedmath:speedmath backend frontend
           echo "Deploy artifacts cleaned up"
 
           # ── Step 5: bring service back online ──
@@ -170,8 +172,11 @@ jobs:
           set -e
           echo "=== Service status ==="
           systemctl status speedmath --no-pager | head -10
-          echo "=== Health check ==="
-          sleep 2
+          echo "=== API health check ==="
+          sleep 1
           curl -sf http://127.0.0.1:8080/api/auth/login -d "email=test@speedmath.local&password=000000" | head -c 100
+          echo ""
+          echo "=== Frontend check ==="
+          curl -sf http://127.0.0.1:8080 | head -c 200
           echo ""
           echo "=== Deploy complete ==="
