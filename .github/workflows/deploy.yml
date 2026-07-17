@@ -140,6 +140,7 @@ jobs:
 
           # Restart service
           systemctl daemon-reload
+          systemctl enable speedmath
           systemctl restart speedmath
 
     - name: Verify deployment

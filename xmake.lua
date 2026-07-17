@@ -17,6 +17,7 @@ target("backend")
     add_deps("libspeedmath")
     add_includedirs("backend")
     add_syslinks("sqlite3")
+    add_ldflags("-static-libstdc++", "-static-libgcc")
 
 -- 可执行文件 (kě zhíxíng wénjiàn — executable binary): 控制台入口 (kòngzhìtái rùkǒu — console entry point)
 target("speedmath")
