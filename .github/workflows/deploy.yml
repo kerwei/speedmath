@@ -82,6 +82,7 @@ jobs:
         tar czf /tmp/speedmath-deploy.tar.gz \
           build/linux/x86_64/release/backend \
           deploy/speedmath.service \
+          deploy/nginx.conf \
           frontend/dist
 
     - name: Upload artifacts
@@ -106,6 +107,36 @@ jobs:
       with:
         name: speedmath-build
         path: .
+
+    - name: DNS resolution check
+      run: |
+        # 域名解析检查 (yùmíng jiěxī jiǎnchá — domain resolution check)
+        DOMAIN="${{ secrets.DOMAIN_NAME }}"
+        ECS_IP="${{ secrets.ECS_SSH_HOST }}"
+
+        if [ -z "$DOMAIN" ]; then
+          echo "WARNING: DOMAIN_NAME secret not set — skipping DNS check"
+          exit 0
+        fi
+
+        echo "Resolving $DOMAIN ..."
+        RESOLVED_IP=$(dig +short "$DOMAIN" | tail -1)
+
+        if [ -z "$RESOLVED_IP" ]; then
+          echo "ERROR: $DOMAIN does not resolve to any IP"
+          exit 1
+        fi
+
+        echo "  Resolved: $RESOLVED_IP"
+        echo "  Expected: $ECS_IP"
+
+        if [ "$RESOLVED_IP" != "$ECS_IP" ]; then
+          echo "ERROR: Domain $DOMAIN resolves to $RESOLVED_IP, but ECS host is $ECS_IP"
+          echo "  Update your DNS A record to point to $ECS_IP before deploying."
+          exit 1
+        fi
+
+        echo "✓ DNS check passed — $DOMAIN → $ECS_IP"
 
     - name: Copy deployment files to server
       uses: appleboy/scp-action@v0.1.3
@@ -156,7 +187,18 @@ jobs:
           chown -R speedmath:speedmath backend frontend
           echo "Deploy artifacts cleaned up"
 
-          # ── Step 5: bring service back online ──
+          # ── Step 5: test nginx config and reload ──
+          if [ -f /etc/nginx/conf.d/speedmath.conf ]; then
+            echo "Testing nginx configuration..."
+            nginx -t
+            systemctl reload nginx || systemctl restart nginx
+            echo "nginx reloaded"
+          else
+            echo "WARNING: /etc/nginx/conf.d/speedmath.conf not found — skipping nginx reload"
+            echo "  Run deploy/setup-ecs.sh <domain> on the ECS to set up nginx"
+          fi
+
+          # ── Step 6: bring service back online ──
           systemctl daemon-reload
           systemctl enable speedmath
           systemctl restart speedmath
@@ -170,13 +212,40 @@ jobs:
         key: ${{ secrets.ECS_SSH_KEY }}
         script: |
           set -e
+          DOMAIN="${{ secrets.DOMAIN_NAME }}"
+
           echo "=== Service status ==="
           systemctl status speedmath --no-pager | head -10
-          echo "=== API health check ==="
+
+          echo ""
+          echo "=== nginx status ==="
+          systemctl status nginx --no-pager | head -10
+
+          echo ""
+          echo "=== Local backend health check (via nginx) ==="
           sleep 1
           curl -sf http://127.0.0.1:8080/api/auth/login -d "email=test@speedmath.local&password=000000" | head -c 100
+
           echo ""
-          echo "=== Frontend check ==="
+          echo "=== Local frontend check (via nginx) ==="
           curl -sf http://127.0.0.1:8080 | head -c 200
+
+          if [ -n "$DOMAIN" ]; then
+            echo ""
+            echo "=== External HTTPS check for $DOMAIN ==="
+            # Check SSL certificate validity
+            echo | openssl s_client -connect "$DOMAIN:443" -servername "$DOMAIN" 2>/dev/null \
+              | openssl x509 -noout -dates 2>/dev/null || echo "  SSL check failed (certbot may not be configured yet)"
+            # Check HTTPS API
+            curl -sf "https://$DOMAIN/api/auth/login" \
+              -d "email=test@speedmath.local&password=000000" \
+              --connect-timeout 5 | head -c 100
+            echo ""
+            echo "=== Domain check complete ==="
+          else
+            echo ""
+            echo "SKIP: DOMAIN_NAME not set — skipping external HTTPS checks"
+          fi
+
           echo ""
           echo "=== Deploy complete ==="

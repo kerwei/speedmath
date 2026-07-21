@@ -110,20 +110,28 @@ xmake f -m debug          # switch to debug mode
 
 ```bash
 # On your ECS instance as root
-bash deploy/setup-ecs.sh
+# Replace <your-domain.com> with your actual domain name
+bash deploy/setup-ecs.sh <your-domain.com>
 ```
 
-This installs `sqlite-devel`, creates the speedmath user, installs the systemd service, and preps `/opt/speedmath`.
+This installs: `sqlite-devel`, **nginx**, **certbot** (Let's Encrypt), creates the speedmath user, installs the systemd service, and preps `/opt/speedmath`.
 
-> **ECS Security Group:** After setup, go to the Aliyun web console → **ECS → Security Groups** → add an inbound rule allowing **TCP 8080** from `0.0.0.0/0`. Instance-level firewalls (firewalld/iptables) are not used on Alibaba Cloud.
+> **After setup**, you still need to:
+> 1. Configure DNS: point your domain's A record to the ECS IP
+> 2. Get an SSL certificate: `sudo certbot --nginx -d <your-domain.com> --non-interactive --agree-tos -m admin@<your-domain.com>`
+> 3. Start nginx: `sudo systemctl start nginx`
+
+> **ECS Security Group:** After setup, go to the Aliyun web console → **ECS → Security Groups** → add inbound rules allowing **TCP 80** and **TCP 443** from `0.0.0.0/0`. Port 8080 only needs to be open if you skip nginx.
 
 ### CI/CD (GitHub Actions)
 
 The workflow in `.github/workflows/deploy.yml` builds and deploys automatically on every push to `main`:
 
 1. Builds C++ backend (xmake) + Vue frontend (npm)
-2. Packages the binary and systemd service into a tarball
-3. SCPs to ECS and restarts the service
+2. Packages the binary, systemd service, and **nginx config** into a tarball
+3. **DNS check** — verifies the domain resolves to the ECS IP before deploying
+4. SCPs to ECS, tests nginx config, reloads nginx, restarts the service
+5. **Verify step** — checks local backend, nginx status, and external HTTPS endpoint
 
 **Required GitHub secrets (on the PROD environment):**
 
@@ -131,6 +139,9 @@ The workflow in `.github/workflows/deploy.yml` builds and deploys automatically 
 |---|---|
 | `ECS_SSH_HOST` | Your ECS IP address (e.g. `123.456.789.0`) |
 | `ECS_SSH_KEY` | Private SSH key for root access to the ECS instance |
+| `DOMAIN_NAME` | (Optional) Your domain name (e.g. `speedmath.example.com`) |
+
+> If `DOMAIN_NAME` is not set, the DNS check and HTTPS verification are skipped. The pipeline still deploys the backend and checks the local service.
 
 ### Manual deploy (from local machine)
 
@@ -138,8 +149,8 @@ The workflow in `.github/workflows/deploy.yml` builds and deploys automatically 
 # Build locally
 xmake build backend && cd frontend && npm run build && cd ..
 
-# Deploy
-bash deploy/deploy.sh speedmath@<your-ecs-ip>
+# Deploy (nginx config is also deployed and nginx is reloaded)
+bash deploy/deploy.sh root@<your-ecs-ip> <your-domain.com>
 ```
 
 ### Architecture
@@ -147,16 +158,21 @@ bash deploy/deploy.sh speedmath@<your-ecs-ip>
 ```
                          Aliyun ECS (1C1G)
         ┌──────────────────────────────────────┐
-        │  systemd → speedmath (port 8080)      │
+        │  nginx (port 80 → 443, HTTPS)         │
+        │    ↓ proxy_pass                       │
+        │  systemd → speedmath (port 8080)       │
         │    ├─ REST API  (/api/*)              │
         │    ├─ WebSocket (/api/ws)             │
         │    └─ Static files (/) ← frontend/dist │
         │  /opt/speedmath/                      │
         │    ├─ backend           (binary)      │
         │    ├─ speedmath.db      (SQLite)      │
-        │    └─ backups/         (DB snapshots) │
+        │    ├── frontend/        (static files) │
+        │    └── backups/        (DB snapshots) │
         └──────────────────────────────────────┘
 ```
+
+**Traffic flow:** User → `https://<domain>` → nginx (TLS termination) → `127.0.0.1:8080` → backend
 
 ## API Endpoints
 
