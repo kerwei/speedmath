@@ -1,0 +1,16 @@
+[Unit]
+Description=QuickMath Backend Server
+After=network.target
+
+[Service]
+Type=simple
+User=quickmath
+Group=quickmath
+WorkingDirectory=/opt/quickmath
+ExecStart=/opt/quickmath/backend
+Restart=always
+RestartSec=3
+Environment=PORT=8080
+
+[Install]
+WantedBy=multi-user.target

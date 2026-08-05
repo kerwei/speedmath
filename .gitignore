@@ -1,0 +1,30 @@
+# xmake build output
+build/
+.xmake/
+
+# Compiled binaries (manual builds)
+quickmath
+
+# Object files
+*.o
+*.obj
+
+# Runtime score persistence
+correct.txt
+elapsed.txt
+
+# SQLite database (runtime data)
+quickmath.db
+quickmath.db-wal
+quickmath.db-shm
+
+# IDE / editor (user-specific)
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# Frontend (qiánduān — frontend)
+frontend/node_modules/
+frontend/dist/
