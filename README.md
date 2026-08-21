@@ -194,9 +194,6 @@ bash deploy/deploy.sh root@<your-ecs-ip> <your-domain.com>
 | POST | `/api/game/answer` | No | Submit an answer |
 | GET | `/api/game/results` | No | Get final results and clean up session |
 
-## Roadmap
-
-> 详细路线图 (xiángxì lùxiàntú — detailed plan): see **[ROADMAP.md](ROADMAP.md)** — mobile-first UI + animation foundation + PWA are next.
 
 ---
 
