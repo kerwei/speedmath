@@ -92,7 +92,7 @@ function _updatePlayers(data) {
   roomStatus.value = data.status
   players.value = (data.players || []).map(p => ({
     userId: p.user_id,
-    username: p.username.split('@')[0],
+    username: p.username,
     ready: p.ready,
     me: p.user_id === userId.value,
     isHost: p.user_id === data.host_id

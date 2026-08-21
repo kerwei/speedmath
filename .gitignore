@@ -18,12 +18,21 @@ quickmath.db
 quickmath.db-wal
 quickmath.db-shm
 
+# DB backups (from scripts/migrate-db.sh)
+backups/
+
+# 本地后端配置 (hán mìyuè — local backend config, contains the secret enc_key)
+quickmath.conf
+
 # IDE / editor (user-specific)
-.vscode/
 .idea/
 *.swp
 *.swo
 *~
+
+# Machine identity (per-machine, written by the detect-machine skill)
+.devmachine
+AGENTS.local.md
 
 # Frontend (qiánduān — frontend)
 frontend/node_modules/

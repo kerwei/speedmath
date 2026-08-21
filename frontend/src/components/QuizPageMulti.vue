@@ -149,6 +149,8 @@ onMounted(() => {
     } else if (phaseVal === 'finished') {
       finished.value = true
       emit('finish', { multiplayer: true, players: ws.results.value })
+      // 游戏结束，关闭 WebSocket，避免连接泄漏 (yóuxì jiéshù — game over: close socket to avoid leaks)
+      ws.disconnect()
     }
     // Sync local phase
     if (phaseVal === 'playing') phase.value = 'input'
@@ -234,14 +236,17 @@ onUnmounted(() => {
       <div class="division-hint-wrapper">
         <div v-if="parsedQuestion?.isDiv" class="division-hint">
           {{ t('quiz.div.hint') }}<br/>
-          {{ t('quiz.div.example') }}: 11 ÷ 7 → <kbd>1 4</kbd>
+          {{ t('quiz.div.example') }}: 11 ÷ 7 → <kbd>1 4</kbd> / <kbd>14</kbd>
         </div>
       </div>
 
       <!-- Answer input -->
+      <!-- inputmode= numeric + pattern= [0-9]* 让移动端弹出数字键盘 (ràng yídòng duān tánchū shùzì jiànpán — show numpad on mobile) -->
       <input ref="answerInput" class="answer-input" v-model="answer"
         :disabled="playerAnswered || phase !== 'input'"
-        :placeholder="t('quiz.placeholder')" @keydown="onKeydown" autofocus />
+        :placeholder="t('quiz.placeholder')" @keydown="onKeydown" autofocus
+        inputmode="numeric" pattern="[0-9]*" enterkeyhint="done"
+        autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false" />
       <button class="btn btn-primary" @click="submitAnswer"
         :disabled="!answer.trim() || playerAnswered || phase !== 'input'">
         {{ t('quiz.submit') }}

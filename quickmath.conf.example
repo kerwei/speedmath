@@ -1,0 +1,18 @@
+# QuickMath 后端配置文件 (hòuduān pèizhì wénjiàn — backend config file)
+# 复制为 quickmath.conf 后生效 (fùzhì wéi — copy to quickmath.conf to take effect)
+# 或运行: ./build/linux/x86_64/release/backend --config <路径> (huò zhǐdìng lùjìng — or pass a path via --config)
+# 缺失该文件时使用以下默认值 (quēshī gāi wénjiàn — missing file → these defaults apply)
+
+# 监听端口 (jiāntīng duānkǒu — listen port)
+port=8080
+
+# 会话过期时间（秒）(huìhuà guòqī shíjiān — solo session TTL in seconds)
+session_ttl=1800
+
+# 清理线程运行间隔（秒）(qīnglǐ xiànchéng yùnxíng jiàngé — stale-session sweep interval in seconds)
+sweep_interval=60
+
+# 加密密钥 (jiāmì mìyuè — encryption key): 64 位十六进制 = 32 字节 (64 hex chars = 32 bytes)
+# 生成命令 (shēngchéng mìnglìng — generate with):  openssl rand -hex 32
+# 生产环境必须设置并妥善保管 (shēngchǎn — MUST be set in production and kept secret)
+enc_key=

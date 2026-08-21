@@ -5,6 +5,11 @@
 #include <iomanip>
 #include <algorithm>
 
+// 静态成员定义 (jìngtài chéngyuán dìngyì — out-of-class definition):
+// 带类内初始化器的 static const long 在被 ODR 使用时 (如 doctest CHECK 按引用绑定)
+// 仍需一个定义; 否则链接报 undefined reference (2026-08-20, test_game_session.cpp).
+const long Manager::PENALTY_MS;
+
 
 Manager::Manager(const int diff, const int intense, const vector<Op>& ops, const vector<AiLevel>& ai_levels):
     _seed(time(NULL)), _diff(diff), _intense(intense), _ops(ops), _op(Op::ADD),
@@ -68,6 +73,9 @@ string Manager::qnext() {
     }
 
     _start_time = time(NULL);
+    // 新题重置评分状态 (xīn tí chóngzhì — reset grading state for a new question)
+    _question_graded = false;
+    _last_grade_result.clear();
     return to_string(x) + " " + op_symbol(_op) + " " + to_string(y);
 }
 
@@ -129,16 +137,20 @@ void Manager::_apply_racing_scores(long human_question_time_ms, bool human_corre
 }
 
 string Manager::grade_answer(const int answer) {
+    if (_question_graded) return _last_grade_result;  // 幂等 (mìděng — idempotent)
     _elapsed += (time(NULL) - _start_time);
     bool correct = check_answer(_op, x, y, answer);
     if (correct) { score++; _human_correct_count++; }
     _grade_ai_answers();
     _apply_racing_scores((time(NULL) - _start_time) * 1000, correct);
     _questions_answered++;
-    return correct ? "correct" : "wrong";
+    _question_graded = true;
+    _last_grade_result = correct ? "correct" : "wrong";
+    return _last_grade_result;
 }
 
 string Manager::grade_answer(const string& answer) {
+    if (_question_graded) return _last_grade_result;  // 幂等 (mìděng — idempotent)
     long elapsed_ms = (time(NULL) - _start_time) * 1000;
     _elapsed += elapsed_ms / 1000;
     bool human_correct = false;
@@ -180,7 +192,9 @@ string Manager::grade_answer(const string& answer) {
     _grade_ai_answers();
     _apply_racing_scores(elapsed_ms, human_correct);
     _questions_answered++;
-    return human_correct ? "correct" : "wrong";
+    _question_graded = true;
+    _last_grade_result = human_correct ? "correct" : "wrong";
+    return _last_grade_result;
 }
 
 int Manager::player_correct_count(int idx) const {

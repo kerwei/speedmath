@@ -1,5 +1,6 @@
 // 数据库助手 (shùjùkù zhùshǒu — database helper)
 // Thin C++ wrapper around SQLite for user/room/token storage
+// v2 users schema: email stored encrypted (email_enc) with a deterministic index (email_hash)
 
 #pragma once
 
@@ -8,13 +9,20 @@
 #include <sqlite3.h>
 #include <iostream>
 #include <sstream>
+#include <random>
+#include <cctype>
+#include "crypto.h"
+#include "email_crypto.h"
 
 using namespace std;
 
 struct UserRow {
     int id;
-    string email;
+    string email_enc;
+    string email_hash;
     string password_hash;
+    string username;
+    string username_updated_at;  // "" = 从未自行设置过 (cóngwèi — never self-chosen)
     string created_at;
 };
 
@@ -44,7 +52,7 @@ public:
         }
         cerr << "[DB] Opened " << path << endl;
         _exec("PRAGMA journal_mode=WAL");
-        _migrate();
+        _init_schema();
     }
 
     ~Db() {
@@ -53,33 +61,57 @@ public:
 
     bool ok() const { return _db != nullptr; }
 
+    // 启动时校验 (qǐdòng shí jiàoyàn — startup check): 仅处理 v2 与全新数据库
+    // v1 数据库必须先用 scripts/migrate-db.sh 迁移 — 应用不含一次性迁移逻辑 (zero residue)
+    void migrate() {
+        if (_table_exists("users")) {
+            if (!_has_column("users", "email_hash")) {
+                cerr << "[DB][FATAL] users table is at v1 (pre email-encryption). "
+                     << "Run scripts/migrate-db.sh before starting this backend." << endl;
+                exit(1);
+            }
+            cerr << "[DB] users table already at v2" << endl;
+        } else {
+            _create_users_table("users");
+        }
+        _seed_users();
+        cerr << "[DB] Migration complete" << endl;
+    }
+
     // ── Users ──
 
-    bool create_user(const string& email, const string& password_hash) {
+    bool create_user(const string& email_enc, const string& email_hash,
+                     const string& password_hash, const string& username) {
         sqlite3_stmt* stmt = _prepare(
-            "INSERT INTO users (email, password_hash) VALUES (?, ?)"
+            "INSERT INTO users (email_enc, email_hash, password_hash, username) VALUES (?, ?, ?, ?)"
         );
         if (!stmt) return false;
-        sqlite3_bind_text(stmt, 1, email.c_str(), -1, SQLITE_TRANSIENT);
-        sqlite3_bind_text(stmt, 2, password_hash.c_str(), -1, SQLITE_TRANSIENT);
+        sqlite3_bind_text(stmt, 1, email_enc.c_str(), -1, SQLITE_TRANSIENT);
+        sqlite3_bind_text(stmt, 2, email_hash.c_str(), -1, SQLITE_TRANSIENT);
+        sqlite3_bind_text(stmt, 3, password_hash.c_str(), -1, SQLITE_TRANSIENT);
+        sqlite3_bind_text(stmt, 4, username.c_str(), -1, SQLITE_TRANSIENT);
         bool ok = _step_done(stmt);
         sqlite3_finalize(stmt);
         return ok;
     }
 
-    UserRow* find_user_by_email(const string& email) {
+    UserRow* find_user_by_email_hash(const string& email_hash) {
         sqlite3_stmt* stmt = _prepare(
-            "SELECT id, email, password_hash, created_at FROM users WHERE email = ?"
+            "SELECT id, email_enc, email_hash, password_hash, username, COALESCE(username_updated_at, ''), created_at "
+            "FROM users WHERE email_hash = ?"
         );
         if (!stmt) return nullptr;
-        sqlite3_bind_text(stmt, 1, email.c_str(), -1, SQLITE_TRANSIENT);
+        sqlite3_bind_text(stmt, 1, email_hash.c_str(), -1, SQLITE_TRANSIENT);
         UserRow* row = nullptr;
         if (sqlite3_step(stmt) == SQLITE_ROW) {
             row = new UserRow{
                 sqlite3_column_int(stmt, 0),
-                reinterpret_cast<const char*>(sqlite3_column_text(stmt, 1)),
-                reinterpret_cast<const char*>(sqlite3_column_text(stmt, 2)),
-                reinterpret_cast<const char*>(sqlite3_column_text(stmt, 3))
+                _col_text(stmt, 1),
+                _col_text(stmt, 2),
+                _col_text(stmt, 3),
+                _col_text(stmt, 4),
+                _col_text(stmt, 5),
+                _col_text(stmt, 6)
             };
         }
         sqlite3_finalize(stmt);
@@ -88,7 +120,8 @@ public:
 
     UserRow* find_user_by_id(int id) {
         sqlite3_stmt* stmt = _prepare(
-            "SELECT id, email, password_hash, created_at FROM users WHERE id = ?"
+            "SELECT id, email_enc, email_hash, password_hash, username, COALESCE(username_updated_at, ''), created_at "
+            "FROM users WHERE id = ?"
         );
         if (!stmt) return nullptr;
         sqlite3_bind_int(stmt, 1, id);
@@ -96,13 +129,60 @@ public:
         if (sqlite3_step(stmt) == SQLITE_ROW) {
             row = new UserRow{
                 sqlite3_column_int(stmt, 0),
-                reinterpret_cast<const char*>(sqlite3_column_text(stmt, 1)),
-                reinterpret_cast<const char*>(sqlite3_column_text(stmt, 2)),
-                reinterpret_cast<const char*>(sqlite3_column_text(stmt, 3))
+                _col_text(stmt, 1),
+                _col_text(stmt, 2),
+                _col_text(stmt, 3),
+                _col_text(stmt, 4),
+                _col_text(stmt, 5),
+                _col_text(stmt, 6)
             };
         }
         sqlite3_finalize(stmt);
         return row;
+    }
+
+    bool username_exists(const string& username) {
+        sqlite3_stmt* stmt = _prepare("SELECT 1 FROM users WHERE username = ? LIMIT 1");
+        if (!stmt) return false;
+        sqlite3_bind_text(stmt, 1, username.c_str(), -1, SQLITE_TRANSIENT);
+        bool exists = sqlite3_step(stmt) == SQLITE_ROW;
+        sqlite3_finalize(stmt);
+        return exists;
+    }
+
+    // 随机用户名 (suíjī yòng hù míng — random username), 唯一性校验 (wéiyī xìng jiàoyàn — uniqueness-checked)
+    string generate_random_username() {
+        static const char chars[] = "abcdefghijklmnopqrstuvwxyz0123456789";
+        static random_device rd;
+        for (int attempt = 0; attempt < 20; attempt++) {
+            string name = "player";
+            for (int i = 0; i < 6; i++) name += chars[rd() % 36];
+            if (!username_exists(name)) return name;
+        }
+        return "player" + to_string(rd() % 100000000);
+    }
+
+    bool update_username(int user_id, const string& username, const string& updated_at) {
+        sqlite3_stmt* stmt = _prepare(
+            "UPDATE users SET username = ?, username_updated_at = ? WHERE id = ?"
+        );
+        if (!stmt) return false;
+        sqlite3_bind_text(stmt, 1, username.c_str(), -1, SQLITE_TRANSIENT);
+        sqlite3_bind_text(stmt, 2, updated_at.c_str(), -1, SQLITE_TRANSIENT);
+        sqlite3_bind_int(stmt, 3, user_id);
+        bool ok = _step_done(stmt);
+        sqlite3_finalize(stmt);
+        return ok;
+    }
+
+    bool update_password(int user_id, const string& password_hash) {
+        sqlite3_stmt* stmt = _prepare("UPDATE users SET password_hash = ? WHERE id = ?");
+        if (!stmt) return false;
+        sqlite3_bind_text(stmt, 1, password_hash.c_str(), -1, SQLITE_TRANSIENT);
+        sqlite3_bind_int(stmt, 2, user_id);
+        bool ok = _step_done(stmt);
+        sqlite3_finalize(stmt);
+        return ok;
     }
 
     // ── Tokens ──
@@ -240,7 +320,7 @@ public:
     vector<RoomPlayerRow> get_room_players(int room_id) {
         vector<RoomPlayerRow> rows;
         sqlite3_stmt* stmt = _prepare(
-            "SELECT rp.room_id, rp.user_id, rp.ready, u.email "
+            "SELECT rp.room_id, rp.user_id, rp.ready, u.username "
             "FROM room_players rp JOIN users u ON rp.user_id = u.id "
             "WHERE rp.room_id = ?"
         );
@@ -279,6 +359,12 @@ public:
 private:
     sqlite3* _db = nullptr;
 
+    // 安全的列取值 (ānquán de liè qǔzhí — null-safe column text; NULL → "")
+    static string _col_text(sqlite3_stmt* stmt, int col) {
+        const unsigned char* t = sqlite3_column_text(stmt, col);
+        return t ? string(reinterpret_cast<const char*>(t)) : string();
+    }
+
     void _exec(const string& sql) {
         char* err = nullptr;
         if (sqlite3_exec(_db, sql.c_str(), nullptr, nullptr, &err) != SQLITE_OK) {
@@ -307,15 +393,72 @@ private:
         return true;
     }
 
-    void _migrate() {
-        _exec(R"(
-            CREATE TABLE IF NOT EXISTS users (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                email TEXT UNIQUE NOT NULL,
-                password_hash TEXT NOT NULL,
-                created_at TEXT DEFAULT (datetime('now'))
+    // ── 迁移 (qiānyí — migration) ──
+
+    bool _table_exists(const string& name) {
+        sqlite3_stmt* stmt = _prepare("SELECT 1 FROM sqlite_master WHERE type='table' AND name=?");
+        if (!stmt) return false;
+        sqlite3_bind_text(stmt, 1, name.c_str(), -1, SQLITE_TRANSIENT);
+        bool exists = sqlite3_step(stmt) == SQLITE_ROW;
+        sqlite3_finalize(stmt);
+        return exists;
+    }
+
+    bool _has_column(const string& table, const string& col) {
+        sqlite3_stmt* stmt = _prepare("PRAGMA table_info(" + table + ")");
+        if (!stmt) return false;
+        bool found = false;
+        while (sqlite3_step(stmt) == SQLITE_ROW) {
+            string name = reinterpret_cast<const char*>(sqlite3_column_text(stmt, 1));
+            if (name == col) { found = true; break; }
+        }
+        sqlite3_finalize(stmt);
+        return found;
+    }
+
+    void _create_users_table(const string& name) {
+        // v2 结构: 邮箱加密存储 (yóuxiāng jiāmì cúnchǔ — email stored encrypted)
+        _exec("CREATE TABLE IF NOT EXISTS " + name + " ("
+            "id INTEGER PRIMARY KEY AUTOINCREMENT,"
+            "email_enc TEXT NOT NULL,"
+            "email_hash TEXT UNIQUE NOT NULL,"
+            "password_hash TEXT NOT NULL,"
+            "username TEXT UNIQUE NOT NULL,"
+            "username_updated_at TEXT,"
+            "created_at TEXT DEFAULT (datetime('now'))"
+        ")");
+    }
+
+    // 种子测试用户 (zhǒngzǐ cèshì yònghù — seed test users, password: 000000)
+    void _seed_users() {
+        if (!crypto::has_enc_key()) {
+            cerr << "[DB] enc_key not set — skipping seed users" << endl;
+            return;
+        }
+        string pw = crypto::pbkdf2_hash("000000");
+        const char* emails[] = {
+            "test@quickmath.local", "test1@quickmath.local", "test2@quickmath.local",
+            "test3@quickmath.local", "test4@quickmath.local"
+        };
+        const char* names[] = { "testplayer", "testplayer1", "testplayer2", "testplayer3", "testplayer4" };
+        for (int i = 0; i < 5; i++) {
+            sqlite3_stmt* stmt = _prepare(
+                "INSERT OR IGNORE INTO users (email_enc, email_hash, password_hash, username) VALUES (?,?,?,?)"
             );
-        )");
+            if (!stmt) continue;
+            string enc = email_enc_of(emails[i]);
+            string hash = email_hash_of(emails[i]);
+            sqlite3_bind_text(stmt, 1, enc.c_str(), -1, SQLITE_TRANSIENT);
+            sqlite3_bind_text(stmt, 2, hash.c_str(), -1, SQLITE_TRANSIENT);
+            sqlite3_bind_text(stmt, 3, pw.c_str(), -1, SQLITE_TRANSIENT);
+            sqlite3_bind_text(stmt, 4, names[i], -1, SQLITE_TRANSIENT);
+            _step_done(stmt);
+            sqlite3_finalize(stmt);
+        }
+    }
+
+    // 初始表结构 (chūshǐ biǎo jiégòu — initial schema; 无加密依赖 — no crypto needed)
+    void _init_schema() {
         _exec(R"(
             CREATE TABLE IF NOT EXISTS tokens (
                 token TEXT PRIMARY KEY,
@@ -344,26 +487,6 @@ private:
                 FOREIGN KEY (user_id) REFERENCES users(id)
             );
         )");
-
-        // Seed default test users (password: 000000)
-        string test_salt = "quickmath_seed";
-        stringstream test_hash;
-        test_hash << test_salt << "$" << hex << _fnv1a(test_salt + ":000000");
-        string test_pw = test_hash.str();
-        _exec("INSERT OR IGNORE INTO users (email, password_hash) VALUES ('test@quickmath.local', '" + test_pw + "')");
-        _exec("INSERT OR IGNORE INTO users (email, password_hash) VALUES ('test1@quickmath.local', '" + test_pw + "')");
-        _exec("INSERT OR IGNORE INTO users (email, password_hash) VALUES ('test2@quickmath.local', '" + test_pw + "')");
-        _exec("INSERT OR IGNORE INTO users (email, password_hash) VALUES ('test3@quickmath.local', '" + test_pw + "')");
-        _exec("INSERT OR IGNORE INTO users (email, password_hash) VALUES ('test4@quickmath.local', '" + test_pw + "')");
-
-        cerr << "[DB] Migration complete" << endl;
-    }
-
-private:
-    // FNV-1a 哈希 — 用于种子密码 (yòng yú zhǒngzǐ mìmǎ — for seeding passwords)
-    static size_t _fnv1a(const string& s) {
-        size_t h = 14695981039346656037ULL;
-        for (char c : s) { h ^= static_cast<size_t>(c); h *= 1099511628211ULL; }
-        return h;
+        if (!_table_exists("users")) _create_users_table("users");
     }
 };

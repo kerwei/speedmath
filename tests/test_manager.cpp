@@ -5,6 +5,7 @@
 #include "../libquickmath/arithmetic.h"
 #include "../libquickmath/manager.h"
 #include <fstream>
+#include <utility>
 
 // ============================================================
 // 构造函数 (gòuzào hánshù — constructor)
@@ -90,11 +91,17 @@ TEST_CASE("Manager::grade_answer(string): addition") {
     int y = stoi(q.substr(q.rfind(' ') + 1));
     int correct = x + y;
 
-    // grade_answer should accept both int form and string form
-    // We can only call the string overload since the int overload
-    // doesn't match Manager's API (it takes a separate int)
+    // Correct answer grades "correct"
     CHECK(m.grade_answer(to_string(correct)) == "correct");
-    CHECK(m.grade_answer(to_string(correct + 1)) == "wrong");
+    // 幂等 (mìděng — idempotent): 同一题重复提交返回上次结果 (re-grade returns stored result)
+    CHECK(m.grade_answer(to_string(correct + 1)) == "correct");
+    CHECK(m.questions_answered() == 1);
+
+    // Wrong answer on a fresh question grades "wrong"
+    q = m.qnext();
+    x = stoi(q.substr(0, q.find(' ')));
+    y = stoi(q.substr(q.rfind(' ') + 1));
+    CHECK(m.grade_answer(to_string(x + y + 1)) == "wrong");
 }
 
 TEST_CASE("Manager::grade_answer(string): subtraction") {
@@ -106,7 +113,14 @@ TEST_CASE("Manager::grade_answer(string): subtraction") {
     int correct = x - y;
 
     CHECK(m.grade_answer(to_string(correct)) == "correct");
-    CHECK(m.grade_answer(to_string(correct + 1)) == "wrong");
+    // 幂等 (mìděng — idempotent)
+    CHECK(m.grade_answer(to_string(correct + 1)) == "correct");
+    CHECK(m.questions_answered() == 1);
+
+    q = m.qnext();
+    x = stoi(q.substr(0, q.find(' ')));
+    y = stoi(q.substr(q.rfind(' ') + 1));
+    CHECK(m.grade_answer(to_string(x - y + 1)) == "wrong");
 }
 
 TEST_CASE("Manager::grade_answer(string): multiplication") {
@@ -118,33 +132,45 @@ TEST_CASE("Manager::grade_answer(string): multiplication") {
     int correct = x * y;
 
     CHECK(m.grade_answer(to_string(correct)) == "correct");
-    CHECK(m.grade_answer(to_string(correct + 1)) == "wrong");
+    // 幂等 (mìděng — idempotent)
+    CHECK(m.grade_answer(to_string(correct + 1)) == "correct");
+    CHECK(m.questions_answered() == 1);
+
+    q = m.qnext();
+    x = stoi(q.substr(0, q.find(' ')));
+    y = stoi(q.substr(q.rfind(' ') + 1));
+    CHECK(m.grade_answer(to_string(x * y + 1)) == "wrong");
 }
 
 TEST_CASE("Manager::grade_answer(string): division") {
     vector<Op> ops = {Op::DIV};
     Manager m(1, 1, ops);
-    string q = m.qnext();
-    int x = stoi(q.substr(0, q.find(' ')));
-    int y = stoi(q.substr(q.rfind(' ') + 1));
-    int quotient = x / y;
-    int remainder = x % y;
+    // Each answer format gets its own fresh question (grading is once per question)
+    auto parse_quotient = [&m]() {
+        string q = m.qnext();
+        int x = stoi(q.substr(0, q.find(' ')));
+        int y = stoi(q.substr(q.rfind(' ') + 1));
+        return make_pair(x / y, x % y);
+    };
 
     // 格式 A: space-separated (kònggé fēngé — space-separated)
-    string correct_spaced = to_string(quotient) + " " + to_string(remainder);
-    CHECK(m.grade_answer(correct_spaced) == "correct");
+    auto [q1, r1] = parse_quotient();
+    CHECK(m.grade_answer(to_string(q1) + " " + to_string(r1)) == "correct");
 
     // 格式 B: concatenated (liánjiē — no space)
-    string correct_concat = to_string(quotient) + to_string(remainder);
-    CHECK(m.grade_answer(correct_concat) == "correct");
+    auto [q2, r2] = parse_quotient();
+    CHECK(m.grade_answer(to_string(q2) + to_string(r2)) == "correct");
 
-    // Plain quotient without remainder
-    if (remainder == 0) {
-        CHECK(m.grade_answer(to_string(quotient)) == "correct");
+    // Plain quotient without remainder: correct iff remainder is 0
+    auto [q3, r3] = parse_quotient();
+    if (r3 == 0) {
+        CHECK(m.grade_answer(to_string(q3)) == "correct");
     } else {
-        CHECK(m.grade_answer(to_string(quotient)) == "wrong");
+        CHECK(m.grade_answer(to_string(q3)) == "wrong");
     }
 
+    // Empty answer grades wrong
+    m.qnext();
     CHECK(m.grade_answer("") == "wrong");
 }
 
@@ -154,10 +180,43 @@ TEST_CASE("Manager::grade_answer(string): division") {
 TEST_CASE("Manager::grade_answer: non-numeric input") {
     vector<Op> ops = {Op::ADD};
     Manager m(1, 1, ops);
-    m.qnext();  // advance to first question
+    // Each input gets its own fresh question (grading is once per question)
+    m.qnext();
     CHECK(m.grade_answer("abc") == "wrong");
+    m.qnext();
     CHECK(m.grade_answer("") == "wrong");
+    m.qnext();
     CHECK(m.grade_answer("3.14") == "wrong");  // float format
+}
+
+TEST_CASE("Manager::grade_answer: double-submit is idempotent (no count inflation)") {
+    // Regression for the 2026-08-17 solo leaderboard bug: fast Enter key-repeat or a
+    // timeout racing a submit re-graded the same question, inflating the `total`
+    // denominator and AI correct counts. Verified API repro: intense=1, one question
+    // double-submitted → results showed total:2, AI correct:2.
+    vector<Op> ops = {Op::ADD};
+    vector<AiLevel> levels = {AiLevel::MEDIUM};
+    Manager m(1, 1, ops, levels);
+    m.qnext();
+
+    // First grade: almost certainly wrong for ADD
+    string r1 = m.grade_answer("12345");
+    int human_before = m.player_correct_count(0);
+    int total_before = m.questions_answered();
+    vector<int> ai_before;
+    for (int i = 1; i < m.player_count(); i++) {
+        ai_before.push_back(m.player_correct_count(i));
+    }
+
+    // Re-grade the same question (double submit / timeout race): same result, no inflation
+    CHECK(m.grade_answer("12345") == r1);
+    CHECK(m.grade_answer("") == r1);
+
+    CHECK(m.questions_answered() == total_before);
+    CHECK(m.player_correct_count(0) == human_before);
+    for (size_t i = 0; i < ai_before.size(); i++) {
+        CHECK(m.player_correct_count(i + 1) == ai_before[i]);
+    }
 }
 
 TEST_CASE("Manager::grade_answer: negative result for subtraction") {

@@ -28,6 +28,21 @@ fi
 echo ""
 echo "=== Step 2: 重新构建 (chóngxīn gòujiàn — rebuild) ==="
 xmake build backend
+xmake build db_migrate
+
+echo ""
+echo "=== Step 2b: 确保配置文件 (quèbǎo pèizhì wénjiàn — ensure config) ==="
+if [ ! -f quickmath.conf ]; then
+    KEY=$(openssl rand -hex 32)
+    printf "port=8080\nsession_ttl=1800\nsweep_interval=60\nenc_key=%s\n" "$KEY" > quickmath.conf
+    echo "已创建 quickmath.conf (created config with a generated enc_key)"
+else
+    echo "quickmath.conf 已存在 (already present)"
+fi
+
+echo ""
+echo "=== Step 2c: 数据库迁移检查 (shùjùkù qiānyí jiǎnchá — DB migration check) ==="
+./scripts/migrate-db.sh quickmath.db quickmath.conf || exit 1
 
 echo ""
 echo "=== Step 3: 启动后端 (qǐdòng hòuduān — start backend) ==="
@@ -42,4 +57,4 @@ fi
 echo "后端已启动: http://localhost:8080 (backend started)"
 echo "按 Ctrl+C 停止 (press Ctrl+C to stop)"
 echo ""
-exec "$BINARY"
+exec "$BINARY" --config quickmath.conf

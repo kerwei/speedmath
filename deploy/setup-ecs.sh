@@ -9,7 +9,9 @@ echo "=== Updating system packages ==="
 sudo dnf update -y
 
 echo "=== Installing dependencies ==="
-sudo dnf install -y sqlite-devel nginx
+# gcc-c++ + -devel packages: backend/db_migrate are built ON this server during deploy
+# (CI-built Ubuntu binaries are ABI-incompatible with AL4 — 2026-08-18 incident)
+sudo dnf install -y sqlite-devel nginx gcc-c++ openssl-devel libicu-devel
 
 # certbot and python3-certbot-nginx are in EPEL on Alibaba Cloud Linux 4
 # Enable EPEL first, try dnf, fall back to pip3

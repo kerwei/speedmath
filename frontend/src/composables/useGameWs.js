@@ -28,14 +28,21 @@ export function useGameWs() {
   }
 
   function _connect() {
+    // 先关闭旧连接，避免连接泄漏 (xiān guānbì jiù liánjiē — close previous socket first to avoid leaks)
+    if (ws) {
+      ws.onclose = null
+      try { ws.close() } catch (e) {}
+      ws = null
+    }
     const url = `${window.location.protocol === 'https:' ? 'wss' : 'ws'}://${window.location.host}/api/ws?token=${token.value}&room_id=${roomId}`
-    ws = new WebSocket(url)
+    const sock = new WebSocket(url)
+    ws = sock
 
-    ws.onopen = () => {
+    sock.onopen = () => {
       console.log('[WS] connected, room=', roomId)
     }
 
-    ws.onmessage = (e) => {
+    sock.onmessage = (e) => {
       try {
         const data = JSON.parse(e.data)
         _handleMessage(data, roomId)
@@ -44,12 +51,13 @@ export function useGameWs() {
       }
     }
 
-    ws.onclose = () => {
+    sock.onclose = () => {
       console.log('[WS] disconnected')
-      ws = null
+      // 仅当仍指向本连接时才清空 (jǐn dāng réng zhǐxiàng běn liánjiē shí cái qīngkōng — only null if this is still the active socket)
+      if (ws === sock) ws = null
     }
 
-    ws.onerror = (err) => {
+    sock.onerror = (err) => {
       console.error('[WS] error:', err)
     }
   }
@@ -122,6 +130,7 @@ export function useGameWs() {
 
   function disconnect() {
     if (ws) {
+      ws.onclose = null
       ws.close()
       ws = null
     }

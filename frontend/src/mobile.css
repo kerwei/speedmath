@@ -1,0 +1,56 @@
+/* 移动端优化样式表 (yídòng duān yōuhuà yàngshì biǎo — mobile optimization stylesheet)
+   Loaded only on touch/mobile devices — see src/main.js */
+
+html {
+  -webkit-text-size-adjust: 100%; /* 防止 iOS 自动调整字号 (fángzhǐ iOS zìdòng tiáozhěng zìhào — prevent iOS auto font resizing) */
+}
+
+body {
+  min-height: 100vh;
+  min-height: 100dvh;             /* 适配移动端动态视口 (shìpèi yídòng duān dòngtài shìkǒu — fit dynamic viewport of mobile browsers) */
+  -webkit-tap-highlight-color: transparent;
+  overscroll-behavior: none;      /* 防止下拉刷新干扰答题 (fángzhǐ xiàlā shuāxīn gānrǎo dátí — prevent pull-to-refresh during quiz) */
+  touch-action: manipulation;     /* 消除双击缩放延迟 (xiāochú shuāngjī suōfàng yánchí — remove double-tap zoom delay) */
+}
+
+/* 答题过程中禁止误选文字 (dátí guòchéng zhōng jìnzhǐ wù xuǎn wénzì — prevent accidental text selection during quiz) */
+.app-container {
+  -webkit-user-select: none;
+  user-select: none;
+}
+
+/* 输入框内仍可正常编辑 (shūrù kuàng nèi réng kě zhèngcháng biānjí — keep inputs editable) */
+.app-container input,
+.app-container textarea {
+  -webkit-user-select: text;
+  user-select: text;
+}
+
+/* 刘海屏安全区适配 (liúhǎi píng ānquán qū shìpèi — notch / gesture-bar safe area) */
+.app-container {
+  padding-left: calc(1rem + env(safe-area-inset-left));
+  padding-right: calc(1rem + env(safe-area-inset-right));
+  padding-top: calc(1rem + env(safe-area-inset-top));
+  padding-bottom: calc(1rem + env(safe-area-inset-bottom));
+}
+
+/* 更大触控目标 (gèng dà chùkòng mùbiāo — larger touch targets) */
+.btn {
+  min-height: 48px;
+  width: 100%;
+}
+
+.card {
+  padding: 1.2rem;
+}
+
+.form-group input,
+.form-group select {
+  min-height: 48px;
+}
+
+/* 答案输入框加大字号，避免 iOS 聚焦自动缩放 (jiā dà zìhào, bìmiǎn iOS jùjiāo zìdòng suōfàng — bigger input font to avoid iOS focus zoom) */
+.answer-input {
+  font-size: 1.75rem;
+  padding: 0.9rem;
+}

@@ -109,7 +109,11 @@ public:
     // Grade all answers and return leaderboard JSON
     string grade_and_leaderboard_json() {
         auto& q = _questions[_current_q];
-        for (auto& p : _players) {
+
+        // Pass 1: grade every player's answer for this question
+        vector<bool> corrects(_players.size(), false);
+        for (size_t i = 0; i < _players.size(); i++) {
+            auto& p = _players[i];
             bool correct = false;
             if (q.op == Op::DIV) {
                 size_t space = p.answer.find(' ');
@@ -133,18 +137,28 @@ public:
             } else {
                 correct = (!p.answer.empty() && isNumber(p.answer) && stoi(p.answer) == _correct_answer(q));
             }
+            corrects[i] = correct;
+        }
 
-            if (correct) {
+        // Slowest correct time for this question — solo parity with
+        // Manager::_apply_racing_scores (previously an empty loop that never
+        // computed it, so wrong answers got own_time + penalty instead).
+        long slowest_correct = 0;
+        for (size_t i = 0; i < _players.size(); i++) {
+            if (corrects[i] && _players[i].q_time_ms > slowest_correct) {
+                slowest_correct = _players[i].q_time_ms;
+            }
+        }
+
+        // Pass 2: apply scores — correct answers keep their own time;
+        // wrong answers get slowest correct time + penalty
+        for (size_t i = 0; i < _players.size(); i++) {
+            auto& p = _players[i];
+            if (corrects[i]) {
                 p.correct++;
                 p.cumulative_ms += p.q_time_ms;
             } else {
-                // Wrong answer: add penalty (slowest correct time + PENALTY_MS)
-                long slowest_correct = 0;
-                for (auto& op : _players) {
-                    // This is a simplification — in the real game we compute per-question
-                    // For now, just add the max correct time
-                }
-                p.cumulative_ms += p.q_time_ms + Manager::PENALTY_MS;
+                p.cumulative_ms += slowest_correct + Manager::PENALTY_MS;
             }
         }
 

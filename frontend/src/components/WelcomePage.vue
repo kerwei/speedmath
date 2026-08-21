@@ -3,7 +3,7 @@ import { ref, computed } from 'vue'
 import { useI18n } from '../composables/useI18n.js'
 
 const { t } = useI18n()
-const emit = defineEmits(['start', 'multiplayer'])
+const emit = defineEmits(['start', 'multiplayer', 'profile'])
 
 const diff = ref(1)
 const intense = ref(1)
@@ -99,6 +99,10 @@ function startGame() {
 
     <button class="btn btn-secondary" @click="$emit('multiplayer')" style="margin-top:0.6rem;width:100%">
       {{ t('settings.multiplayer') }}
+    </button>
+
+    <button class="btn btn-secondary" @click="$emit('profile')" style="margin-top:0.6rem;width:100%">
+      {{ t('profile.open') }}
     </button>
   </div>
 </template>

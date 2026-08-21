@@ -3,6 +3,7 @@ import { ref } from 'vue'
 import WelcomePage from './components/WelcomePage.vue'
 import AuthPage from './components/AuthPage.vue'
 import LobbyPage from './components/LobbyPage.vue'
+import ProfilePage from './components/ProfilePage.vue'
 import QuizPageSolo from './components/QuizPageSolo.vue'
 import QuizPageMulti from './components/QuizPageMulti.vue'
 import ResultsPage from './components/ResultsPage.vue'
@@ -12,21 +13,31 @@ import { useGameWs } from './composables/useGameWs.js'
 
 const { t, setLocale, locale } = useI18n()
 const { isLoggedIn } = useAuth()
-const { gamePhase } = useGameWs()
+const { gamePhase, disconnect } = useGameWs()
 
 const page = ref('welcome')
 const sessionId = ref('')
 const config = ref({})
 const multiplayer = ref(false)
 const mpResults = ref([])
+// 登录后跳转目标 (dēnglù hòu tiàozhuǎn mùbiāo — page to return to after auth)
+const redirectAfterAuth = ref('welcome')
 
 function onStart(cfg) {
   config.value = cfg
   page.value = 'quiz'
 }
 
+// 前往登录页并记录来源页面 (qiánwǎng dēnglù yè bìng jìlù láiyuán — go to auth, remember where to return)
+function goAuth(intent) {
+  redirectAfterAuth.value = intent
+  page.value = 'auth'
+}
+
 function onMultiplayer() {
-  page.value = isLoggedIn() ? 'lobby' : 'auth'
+  // 未登录时先登录, 登录后回到多人游戏 (dēnglù hòu huídào — login first, return to lobby after)
+  if (isLoggedIn()) page.value = 'lobby'
+  else goAuth('lobby')
 }
 
 function onLobbyStart() {
@@ -36,7 +47,8 @@ function onLobbyStart() {
 }
 
 function onAuthDone() {
-  page.value = 'lobby'
+  // 返回用户点击登录按钮前所在的页面 (fǎnhuí yuánlái yèmiàn — return to the page the user came from)
+  page.value = redirectAfterAuth.value
 }
 
 function onFinish(detail) {
@@ -51,6 +63,8 @@ function onFinish(detail) {
 }
 
 function onRestart() {
+  // 返回首页时确保 WebSocket 已关闭 (fǎnhuí shǒuyè shí — ensure WS is closed when returning to home)
+  disconnect()
   sessionId.value = ''
   config.value = {}
   mpResults.value = []
@@ -60,6 +74,19 @@ function onRestart() {
 
 function onBackFromLobby() {
   multiplayer.value = false
+  page.value = 'welcome'
+}
+
+function onProfile() {
+  // 始终打开个人资料页; 未登录时页面内提供登录入口 (lóugòu — open profile; page handles login itself)
+  page.value = 'profile'
+}
+
+function onProfileLogin() {
+  goAuth('profile')
+}
+
+function onBackFromProfile() {
   page.value = 'welcome'
 }
 
@@ -77,9 +104,10 @@ function toggleLang() {
       </div>
       <button class="lang-toggle" @click="toggleLang">{{ locale === 'zh' ? 'EN' : '中' }}</button>
     </div>
-    <WelcomePage v-if="page === 'welcome'" @start="onStart" @multiplayer="onMultiplayer" />
+    <WelcomePage v-if="page === 'welcome'" @start="onStart" @multiplayer="onMultiplayer" @profile="onProfile" />
     <AuthPage v-else-if="page === 'auth'" @done="onAuthDone" />
     <LobbyPage v-else-if="page === 'lobby'" @start="onLobbyStart" @back="onBackFromLobby" />
+    <ProfilePage v-else-if="page === 'profile'" @back="onBackFromProfile" @login="onProfileLogin" />
     <QuizPageSolo
       v-else-if="page === 'quiz' && !multiplayer"
       :config="config"

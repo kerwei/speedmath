@@ -1,5 +1,5 @@
 <script setup>
-import { ref, onMounted } from 'vue'
+import { ref, computed, onMounted } from 'vue'
 import { useI18n } from '../composables/useI18n.js'
 
 const { t } = useI18n()
@@ -11,7 +11,13 @@ const loading = ref(true)
 
 const DIFFICULTY_KEY = ['results.easy', 'results.medium', 'results.hard']
 
+// 多人模式结果由 WebSocket 直接传入 (duōrén móshì jiéguǒ — multiplayer results come from WS directly)
+const hasMpPlayers = computed(() => props.mpPlayers.length > 0)
+
 function typeLabel(p) {
+  // 多人模式 (duōrén móshì — multiplayer): 后端返回真实用户名/邮箱 (zhēnshí yònghùmíng/yóuxiāng — real username/email)
+  if (p.username) return p.username
+  // 单人模式 (dān rén móshì — solo): human / AI 标签 (biāoqiān — label)
   if (p.type === 'human') return t('human')
   const diffKey = DIFFICULTY_KEY[p.level] || DIFFICULTY_KEY[0]
   return t('ai.prefix') + p.idx + ' (' + t(diffKey) + ')'
@@ -49,12 +55,12 @@ onMounted(async () => {
       <div class="results-table">
         <div class="rt-row rt-header">
           <span class="rt-rank">#</span>
-          <span class="rt-name">{{ t('results.difficulty') }}</span>
+          <span class="rt-name">{{ hasMpPlayers ? t('results.name') : t('results.difficulty') }}</span>
           <span class="rt-correct">{{ t('results.correct') }}</span>
           <span class="rt-time">{{ t('results.time') }}</span>
           <span class="rt-gap">{{ t('results.gap') }}</span>
         </div>
-        <div v-for="(p, i) in players" :key="p.idx" class="rt-row"
+        <div v-for="(p, i) in players" :key="p.user_id ?? p.idx" class="rt-row"
           :class="{ 'rt-human': p.type === 'human' }">
           <span class="rt-rank">{{ i === 0 ? '🥇' : i === 1 ? '🥈' : i === 2 ? '🥉' : (i + 1) + '.' }}</span>
           <span class="rt-name">{{ typeLabel(p) }}</span>

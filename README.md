@@ -5,38 +5,17 @@ A C++20 mental arithmetic trainer with a web frontend. Supports all four basic o
 ## Project Structure
 
 ```
-├── xmake.lua                   # 构建配置 (gòujiàn pèizhì — build config)
-├── main.cpp                    # 控制台入口 (kòngzhìtái rùkǒu — console entry point)
-├── backend/
-│   ├── main.cpp                # HTTP 后端服务器 (hòuduān fúwùqì — backend server)
-│   ├── db.h                    # SQLite 数据库封装 (shùjùkù fēngzhuāng — DB wrapper)
-│   └── httplib.h               # HTTP 库 (single-header)
-├── frontend/
-│   ├── index.html              # SPA 入口
-│   ├── vite.config.js          # Vite 配置 + 代理
-│   └── src/
-│       ├── App.vue             # 根组件 (gēn zǔjiàn — root component)
-│       ├── style.css           # 全局样式 (quánjú yàngshì — global styles)
-│       ├── composables/
-│       │   └── useI18n.js      # 国际化 composable
-│       └── locales/
-│           ├── zh.json         # 中文语言包
-│           └── en.json         # 英文语言包
-│       └── components/
-│           ├── WelcomePage.vue  # 设置页面 (shèzhì — settings)
-│           ├── QuizPage.vue     # 答题页面 (dátí — quiz)
-│           └── ResultsPage.vue  # 结果页面 (jiéguǒ — results)
-├── libquickmath/
-│   ├── arithmetic.h / .cpp     # 运算符枚举、四则运算校验、随机数生成
-│   ├── ai_opponent.h / .cpp    # AI 对手 (AI opponent with difficulty levels)
-│   └── manager.h / .cpp        # 游戏管理：出题、计分、计时、持久化
-├── tests/
-│   ├── doctest.h               # 测试框架 (test framework)
-│   ├── test_arithmetic.cpp     # 算术测试
-│   ├── test_manager.cpp        # 管理器测试
-│   ├── test_ai.cpp             # AI 对手测试
-│   └── db_test.cpp             # 数据库测试
-└── build/                      # 构建输出 (gòujiàn shūchū — build output)
+├── xmake.lua              # 构建配置 (gòujiàn pèizhì — build config)
+├── main.cpp               # 控制台入口 (kòngzhìtái rùkǒu — console entry point)
+├── quickmath.conf.example # 后端配置示例 (hòuduān pèizhì shìlì — backend config sample)
+├── backend/               # HTTP 后端: REST API + WebSocket 多人游戏 (hòuduān — backend server)
+├── frontend/              # Vue 3 SPA 前端 (qiánduān — frontend)
+├── libquickmath/          # 核心游戏逻辑静态库 (héxīn yóuxì luóji — core game logic, C++20)
+├── scripts/               # 开发 / 测试 / WSL 网络配置脚本 (kāifā/cèshì — dev, test & WSL network scripts)
+├── tests/                 # doctest 单元测试 + 数据库测试 (dānyuán cèshì — unit tests)
+├── deploy/                # ECS 部署脚本 + nginx/systemd 配置 (bùshǔ — deployment)
+├── .github/workflows/     # CI/CD: GitHub Actions → Aliyun ECS
+└── build/                 # 构建输出 (gòujiàn shūchū — build output)
 ```
 
 ## Quick Start (Web — Full Stack)
@@ -98,9 +77,26 @@ xmake run quickmath       # build and run console version
 xmake run backend         # build and run backend server
 xmake run test_db         # run database unit test
 xmake run tests           # run all C++ unit tests
+./scripts/test-session-sweep.sh   # session-sweep integration test (starts backend on :8099)
 xmake clean               # clean build artifacts
 xmake f -m debug          # switch to debug mode
 ```
+
+## Configuration
+
+The backend reads optional settings from `quickmath.conf` in its working directory, or from a path passed via `--config`:
+
+```bash
+./build/linux/x86_64/release/backend --config /path/to/quickmath.conf
+```
+
+If the file is missing, defaults apply. See `quickmath.conf.example` for the format (`key=value` lines, `#` comments).
+
+| Key | Default | Description |
+|---|---|---|
+| `port` | `8080` | HTTP listen port |
+| `session_ttl` | `1800` | Solo session TTL in seconds (stale sessions are reaped by a watchdog thread) |
+| `sweep_interval` | `60` | Stale-session sweep interval in seconds |
 
 ## Deployment (Aliyun ECS)
 
@@ -139,9 +135,16 @@ The workflow in `.github/workflows/deploy.yml` builds and deploys automatically 
 |---|---|
 | `ECS_SSH_HOST` | Your ECS IP address (e.g. `123.456.789.0`) |
 | `ECS_SSH_KEY` | Private SSH key for root access to the ECS instance |
+| `ENC_KEY` | **Required** — hex key (`openssl rand -hex 32`) used to encrypt user emails (AES-256-GCM) and derive the HMAC lookup index. Provisioned into `/opt/quickmath/quickmath.conf` on first deploy; the deploy never overwrites an existing config |
 | `DOMAIN_NAME` | (Optional) Your domain name (e.g. `quickmath.example.com`) |
 
 > If `DOMAIN_NAME` is not set, the DNS check and HTTPS verification are skipped. The pipeline still deploys the backend and checks the local service.
+
+> **⚠️ `ENC_KEY` is the master key for all stored emails** (`email_enc` + `email_hash` are both derived from it). Keep it safe:
+> - **Back it up** (password manager / vault) — if it's ever lost, users can't log in by email and profile emails can't be decrypted. GitHub secrets are not a backup.
+> - **Never rotate it casually.** The value in `/opt/quickmath/quickmath.conf` is written once and intentionally never overwritten, so changing the GitHub secret alone has no effect on the server — and changing the key on the server without a planned re-encryption of existing rows breaks login/decryption for every user. Rotation is a deliberate migration, not a routine credential refresh.
+> - **Same key for manual deploys** — `deploy/deploy.sh` reads it from the `ENC_KEY` env var; it must match the GitHub secret (they provision the same config).
+> - **Local dev note:** your dev `quickmath.conf` + `quickmath.db` are encrypted with whatever key they were created with — regenerating the key only affects environments that get the new value (the first prod deploy). If you also switch your local dev config to the new key, existing dev users' logins break (HMAC index mismatch) — wipe the dev DB or keep the old key locally.
 
 ### Manual deploy (from local machine)
 
@@ -166,6 +169,7 @@ bash deploy/deploy.sh root@<your-ecs-ip> <your-domain.com>
         │    └─ Static files (/) ← frontend/dist │
         │  /opt/quickmath/                      │
         │    ├─ backend           (binary)      │
+        │    ├─ quickmath.conf    (optional)    │
         │    ├─ quickmath.db      (SQLite)      │
         │    ├── frontend/        (static files) │
         │    └── backups/        (DB snapshots) │
@@ -192,20 +196,7 @@ bash deploy/deploy.sh root@<your-ecs-ip> <your-domain.com>
 
 ## Roadmap
 
-- [x] Four arithmetic operators (+ - * /)
-- [x] Web frontend (Vue 3 SPA)
-- [x] C++ HTTP backend (cpp-httplib)
-- [x] AI opponent mode with configurable difficulty
-- [x] Internationalization (中文 / English)
-- [x] SQLite database for user/room storage
-- [x] User registration and login (token-based auth)
-- [x] Room system (create / join / ready / leave / status)
-- [x] Frontend: login/register page and room lobby UI
-- [x] Real-time multiplayer (WebSocket gameplay + leaderboard sync)
-- [x] Multiplayer game loop (host starts, timed answers, auto-advance)
-- [x] Disconnect handling (player drop detection, answer timeout)
-- [x] CI/CD pipeline (GitHub Actions → Aliyun ECS)
-- [ ] Android port
+> 详细路线图 (xiángxì lùxiàntú — detailed plan): see **[ROADMAP.md](ROADMAP.md)** — mobile-first UI + animation foundation + PWA are next.
 
 ---
 

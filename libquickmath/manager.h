@@ -15,6 +15,11 @@ using namespace std;
 class Manager {
     public:
         Manager(const int diff, const int intense, const vector<Op>& ops, const vector<AiLevel>& ai_levels = {});
+        // 析构函数 (xīgòu hánshù — destructor): 释放 AI 对手，避免内存泄漏 (shìfàng AI duìshǒu — free AI opponents to avoid leaks)
+        ~Manager() { for (auto* ai : _ais) delete ai; }
+        // 禁用拷贝 (jìnyòng kǎobèi — no copying): 避免指针重复释放 (bìmiǎn zhǐzhēn chóngfù shìfàng — prevents double-free)
+        Manager(const Manager&) = delete;
+        Manager& operator=(const Manager&) = delete;
 
         std::string qnext();
         std::string grade_answer(const int answer);
@@ -71,6 +76,12 @@ class Manager {
         int _human_correct_count = 0;
         vector<int> _ai_correct_counts;
         int _questions_answered = 0;
+
+        // 评分幂等 (píngfēn mìděng — grading idempotency): 每道题只评分一次,
+        // 重复提交 (Enter 连击 / 超时与提交竞态) 直接返回上次结果,
+        // 防止 total/correct 计数与时间被重复累加 (2026-08-17 已知问题, 2026-08-20 修复)
+        bool _question_graded = false;
+        std::string _last_grade_result;
 
         void update_elapsed();
         void update_hit();
