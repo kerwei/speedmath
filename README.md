@@ -198,7 +198,6 @@ bash deploy/deploy.sh root@<your-ecs-ip> <your-domain.com>
 ---
 
 <div align="center">
-  <img src="https://github.com/deepseek-ai/DeepSeek-V2/blob/main/figures/logo.svg?raw=true" width="240" alt="DeepSeek Logo" />
-  <br/>
-  <sub><i>Powered by <strong>DeepSeek-V4-Flash</strong></i></sub>
+<br/>
+  <sub><i>Powered by <strong>DSH</strong></i></sub>
 </div>
